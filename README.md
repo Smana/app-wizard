@@ -12,6 +12,12 @@ no cluster credentials — its blast radius is one Git repository.
 > where it began as SPEC-008. That repo's `docs/specs/009-app-wizard-oss-split/`
 > holds the extraction spec.
 
+![The App Wizard create form, with the live generated claim on the right](docs/assets/screenshot-create.png)
+
+*The form above is generated entirely from the bundled example XRD — the fields,
+the defaults, and the `example.com/v1beta1` claim GVK all come from it, nothing
+is hardcoded. Run it yourself with `make dev`.*
+
 ## Why
 
 Declaring an app on a Crossplane platform means knowing the claim schema, the
@@ -66,9 +72,13 @@ paths, PR file-layout template, render engine, branding, LLM assists). Secrets
 environment only** and are never read from the file. Environment variables
 override file values.
 
-<!-- T011 (Phase 3): full wizard.yaml key-by-key reference + screenshots. -->
 See [`examples/wizard.yaml`](examples/wizard.yaml) for a complete, commented
-example; a full key reference will live in `docs/configuration.md`.
+example, and [`docs/configuration.md`](docs/configuration.md) for the full
+key-by-key reference (every `wizard.yaml` key, its env override, and its default).
+
+The claim `apiVersion`/`kind` are **not** configured — they are read from the
+XRD (`spec.group` + served version + `claimNames.kind`/`names.kind`), so pointing
+`schema.xrdPath` at your XRD is all it takes.
 
 ## Authentication
 
