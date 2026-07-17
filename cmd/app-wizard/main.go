@@ -69,7 +69,7 @@ func main() {
 
 	validator := validate.NewValidator(pipeline)
 	renderer := render.NewCrossplaneRenderer(cfg.RepoRoot, cfg.CompositionPath, cfg.FunctionsPath, cfg.EnvConfigPath, cfg.FunctionsDevTargets)
-	prService := pr.NewService(validator, renderer, pipeline, cfg.RepoBaseBranch)
+	prService := pr.NewService(validator, renderer, pipeline, cfg.RepoBaseBranch, cfg.Layout)
 	appStore := appstore.New(pipeline, cfg.RepoBaseBranch)
 
 	// LLM assists (Phase 3, FR-011). Available when an API key or a base URL

@@ -39,7 +39,7 @@ func validService() *Service {
 		{Kind: "Deployment", Name: "xplane-myapp"},
 		{Kind: "Service", Name: "xplane-myapp"},
 	}}
-	return NewService(v, r, fakeStacks{}, "main")
+	return NewService(v, r, fakeStacks{}, "main", "")
 }
 
 func newReq() api.PRRequest {
@@ -182,7 +182,7 @@ func TestCreateIdempotentWithExistingParent(t *testing.T) {
 func TestCreateBlockedByValidationGate(t *testing.T) {
 	v := fakeValidator{resp: api.ValidateResponse{Valid: false, CELViolations: []api.CELRule{{Message: "bad"}}}}
 	r := &render.FakeRenderer{}
-	s := NewService(v, r, fakeStacks{}, "main")
+	s := NewService(v, r, fakeStacks{}, "main", "")
 	fp := gitprovider.NewFakeProvider()
 
 	_, err := s.Create(context.Background(), fp, newReq())
@@ -214,6 +214,46 @@ func TestCreateUnknownStack(t *testing.T) {
 	}
 	if _, ok := err.(*GateError); !ok {
 		t.Errorf("expected *GateError, got %T", err)
+	}
+}
+
+// TestCreateCustomLayout proves the file layout is templated (FR-003): a custom
+// template relocates all three files, and the parent kustomization lives at the
+// template's parent directory.
+func TestCreateCustomLayout(t *testing.T) {
+	v := fakeValidator{resp: api.ValidateResponse{Valid: true}}
+	r := &render.FakeRenderer{Resources: []api.RenderedResource{{Kind: "Deployment", Name: "x"}}}
+	s := NewService(v, r, fakeStacks{}, "main", "workloads/{stack}/{app}")
+	fp := gitprovider.NewFakeProvider()
+
+	if _, err := s.Create(context.Background(), fp, newReq()); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got := map[string]bool{}
+	for _, f := range fp.Commits[0].Files {
+		got[f.Path] = true
+	}
+	for _, want := range []string{
+		"workloads/team-a/myapp/app.yaml",
+		"workloads/team-a/myapp/kustomization.yaml",
+		"workloads/team-a/kustomization.yaml",
+	} {
+		if !got[want] {
+			t.Errorf("missing %q; got %v", want, got)
+		}
+	}
+}
+
+func TestExpandLayout(t *testing.T) {
+	cases := []struct{ layout, want string }{
+		{"apps/{stack}/{app}", "apps/team-a/myapp"},
+		{"workloads/{app}", "workloads/myapp"},
+		{"{stack}/apps/{app}", "team-a/apps/myapp"},
+	}
+	for _, tc := range cases {
+		if got := expandLayout(tc.layout, "team-a", "myapp"); got != tc.want {
+			t.Errorf("expandLayout(%q) = %q, want %q", tc.layout, got, tc.want)
+		}
 	}
 }
 

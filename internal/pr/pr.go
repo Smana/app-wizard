@@ -44,11 +44,16 @@ type Service struct {
 	renderer   render.Renderer
 	stacks     StackResolver
 	baseBranch string
+	layout     string
 }
 
-// NewService builds the PR service.
-func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch string) *Service {
-	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch}
+// NewService builds the PR service. layout is the file-layout template for a new
+// app directory ({stack}/{app} tokens); empty falls back to "apps/{stack}/{app}".
+func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch, layout string) *Service {
+	if layout == "" {
+		layout = "apps/{stack}/{app}"
+	}
+	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch, layout: layout}
 }
 
 // Create runs the requested operation (create/update/delete) and, on success,
@@ -88,20 +93,30 @@ func (s *Service) Create(ctx context.Context, provider gitprovider.Provider, req
 	}
 }
 
-// appPaths returns the app.yaml, app kustomization.yaml, and parent
-// kustomization.yaml paths for a stack/app.
-func appPaths(stack, app string) (appPath, kustPath, parentKustPath string) {
-	appDir := path.Join("apps", stack, app)
+// appPaths expands the layout template for a stack/app and returns the app.yaml,
+// app kustomization.yaml, and parent kustomization.yaml paths, plus the app
+// directory itself (its basename is the entry added to the parent kustomization).
+// The default template "apps/{stack}/{app}" reproduces the historical layout.
+func (s *Service) appPaths(stack, app string) (appPath, kustPath, parentKustPath, appDir string) {
+	appDir = expandLayout(s.layout, stack, app)
+	parentDir := path.Dir(appDir)
 	return path.Join(appDir, "app.yaml"),
 		path.Join(appDir, "kustomization.yaml"),
-		path.Join("apps", stack, "kustomization.yaml")
+		path.Join(parentDir, "kustomization.yaml"),
+		appDir
+}
+
+// expandLayout substitutes {stack}/{app} in the layout template. Convention: the
+// last path segment is the app directory (its basename registers in the parent).
+func expandLayout(layout, stack, app string) string {
+	return path.Clean(strings.NewReplacer("{stack}", stack, "{app}", app).Replace(layout))
 }
 
 // create is the default new-app flow (three files). It refuses to clobber an
 // existing app (US-1.3): if apps/<stack>/<app>/app.yaml exists at base, it
 // returns a GateError directing the user to edit instead.
 func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req api.PRRequest, stack api.Stack, gvk api.GVK) (api.PRResponse, error) {
-	appPath, kustPath, parentKustPath := appPaths(req.Stack, req.AppName)
+	appPath, kustPath, parentKustPath, appDir := s.appPaths(req.Stack, req.AppName)
 
 	// Guard: don't overwrite an existing app.
 	if _, _, err := provider.ReadFile(ctx, s.baseBranch, appPath); err == nil {
@@ -141,7 +156,7 @@ func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req
 	if err != nil && err != gitprovider.ErrNotFound {
 		return api.PRResponse{}, fmt.Errorf("read parent kustomization: %w", err)
 	}
-	parentYAML, _, err := AddResourceToKustomization(existingParent, "./"+req.AppName)
+	parentYAML, _, err := AddResourceToKustomization(existingParent, "./"+path.Base(appDir))
 	if err != nil {
 		return api.PRResponse{}, err
 	}
@@ -162,7 +177,7 @@ func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req
 // app.yaml. It requires the app to exist, runs the same validate + render gates,
 // and commits ONLY app.yaml (kustomizations already exist).
 func (s *Service) update(ctx context.Context, provider gitprovider.Provider, req api.PRRequest, stack api.Stack, gvk api.GVK) (api.PRResponse, error) {
-	appPath, _, _ := appPaths(req.Stack, req.AppName)
+	appPath, _, _, _ := s.appPaths(req.Stack, req.AppName)
 
 	existing, _, err := provider.ReadFile(ctx, s.baseBranch, appPath)
 	if err == gitprovider.ErrNotFound {
@@ -206,7 +221,7 @@ func (s *Service) update(ctx context.Context, provider gitprovider.Provider, req
 // removes the "./<app>" entry from the parent kustomization. No validate/render
 // gates run for a removal.
 func (s *Service) delete(ctx context.Context, provider gitprovider.Provider, req api.PRRequest, stack api.Stack) (api.PRResponse, error) {
-	appPath, kustPath, parentKustPath := appPaths(req.Stack, req.AppName)
+	appPath, kustPath, parentKustPath, appDir := s.appPaths(req.Stack, req.AppName)
 
 	if _, _, err := provider.ReadFile(ctx, s.baseBranch, appPath); err == gitprovider.ErrNotFound {
 		return api.PRResponse{}, &GateError{
@@ -220,7 +235,7 @@ func (s *Service) delete(ctx context.Context, provider gitprovider.Provider, req
 	if err != nil && err != gitprovider.ErrNotFound {
 		return api.PRResponse{}, fmt.Errorf("read parent kustomization: %w", err)
 	}
-	parentYAML, _, err := RemoveResourceFromKustomization(existingParent, "./"+req.AppName)
+	parentYAML, _, err := RemoveResourceFromKustomization(existingParent, "./"+path.Base(appDir))
 	if err != nil {
 		return api.PRResponse{}, err
 	}
