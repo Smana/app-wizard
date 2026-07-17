@@ -1,0 +1,12 @@
+# Deployable targets shown in the wizard's stack dropdown. The wizard never
+# creates stacks — this registry is platform-owned. namespace is where the claim
+# lands; ownerTeam is surfaced in the PR body.
+stacks:
+  - name: demo
+    description: Sandbox stack for trying the wizard.
+    namespace: demo
+    ownerTeam: platform
+  - name: team-a
+    description: Team A's applications.
+    namespace: apps-team-a
+    ownerTeam: team-a

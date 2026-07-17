@@ -1,0 +1,29 @@
+# Presentation overlay for the example XRD (FR-003). Controls ONLY how fields
+# are shown (tier, group, label, help, order) — never field knowledge, which the
+# wizard reads from the XRD. A field absent here defaults to the "advanced" tier
+# and is never hidden.
+groups:
+  - id: exposure
+    label: Networking & exposure
+    tier: advanced
+    order: 10
+
+fields:
+  image:
+    tier: basic
+    label: Image
+    order: 1
+    example: ghcr.io/acme/api:1.2.3
+  port:
+    tier: basic
+    label: Port
+    order: 2
+  replicas:
+    tier: basic
+    label: Replicas
+    order: 3
+  route:
+    tier: advanced
+    group: exposure
+    label: HTTP route
+    order: 1

@@ -1,0 +1,68 @@
+# Example Crossplane XRD the wizard generates its form from. Point wizard.yaml's
+# schema.xrdPath at your own XRD to serve your platform's claim instead — the
+# wizard reads the group, served version, claim kind, fields, defaults, and CEL
+# rules straight from here (nothing is hardcoded).
+#
+# Cut at v1beta1 on purpose: the wizard derives the claim apiVersion from the
+# XRD, so the served version is whatever you declare.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: apps.example.com
+spec:
+  group: example.com
+  scope: Namespaced
+  names:
+    kind: App
+    plural: apps
+  versions:
+    - name: v1beta1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: object
+                  description: Container image to run.
+                  required:
+                    - repository
+                  properties:
+                    repository:
+                      type: string
+                      description: Image repository, e.g. ghcr.io/acme/api.
+                    tag:
+                      type: string
+                      description: Image tag.
+                      default: latest
+                port:
+                  type: integer
+                  description: Container port to expose via the Service.
+                  minimum: 1
+                  maximum: 65535
+                  default: 8080
+                replicas:
+                  type: integer
+                  description: Replica count.
+                  minimum: 1
+                  default: 1
+                route:
+                  type: object
+                  description: External HTTP exposure.
+                  properties:
+                    enabled:
+                      type: boolean
+                      description: Expose the app over HTTP.
+                      default: false
+                    hostname:
+                      type: string
+                      description: Hostname (required when the route is enabled).
+              x-kubernetes-validations:
+                - rule: "!has(self.route) || !self.route.enabled || has(self.route.hostname)"
+                  message: route.hostname is required when route.enabled is true

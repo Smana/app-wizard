@@ -1,0 +1,50 @@
+# Example wizard.yaml — the complete, commented configuration surface. Copy it,
+# point the paths at your own XRD/stacks, set repo.owner/name, and run the image
+# with your GitHub OAuth secrets in the environment. See docs/configuration.md
+# for the full key reference.
+#
+# `make dev` runs the wizard against this file with AUTH_MODE=dev (no GitHub) and
+# the render preview off, so it works offline with no Crossplane cluster.
+
+# The GitOps repository PRs are opened against.
+repo:
+  owner: your-org
+  name: your-gitops-repo
+  baseBranch: main
+
+# Where the form's schema comes from. Paths are resolved under REPO_ROOT.
+schema:
+  xrdPath: examples/xrd.yaml
+  stacksPath: examples/stacks.yaml
+  uiHintsPath: examples/ui-hints.yaml
+
+# PR file-layout template. {stack} and {app} expand to the chosen stack and app
+# name; the last segment is the app directory.
+layout: "apps/{stack}/{app}"
+
+# Crossplane render preview. Off here so the example needs no composition or
+# render sidecars; turn on and set the paths to preview composed resources.
+render:
+  enabled: false
+  # compositionPath: examples/composition.yaml
+  # functionsPath: examples/functions.yaml
+  # envConfigPath: examples/environmentconfig.yaml
+
+# SPA chrome. Neutral defaults when unset; theme entries become CSS custom
+# properties on :root (keys map to the wizard's --var names).
+branding:
+  title: App Wizard (example)
+  # logoUrl: /logo.svg
+  # theme:
+  #   primary: "#0077b8"
+
+# LLM assists (optional). Assists turn ON when LLM_API_KEY (env-only — never in
+# this file) or a baseUrl is set; leaving both unset keeps them off, as here.
+assists:
+  # model: claude-opus-4-8
+  # baseUrl: https://api.anthropic.com
+
+# Authentication. `dev` bypasses login for local use; `github` is the real mode.
+auth:
+  mode: dev
+  # redirectUrl: https://app-wizard.example.com/api/auth/callback
