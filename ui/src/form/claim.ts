@@ -1,20 +1,23 @@
-// Assemble the App claim object from form state and dump it to YAML (FR-012).
+// Assemble the claim object from form state and dump it to YAML (FR-012).
 // js-yaml v5 is ESM named-exports only — there is no default export.
 import { dump } from "js-yaml";
+import type { GVK } from "../api/types";
 import { prune } from "./model";
 
 export interface ClaimInput {
+  // gvk is derived from the XRD (via /api/schema), never hardcoded (FR-001).
+  gvk: GVK;
   name: string;
   namespace?: string;
   spec: unknown;
 }
 
-export function buildClaim({ name, namespace, spec }: ClaimInput): Record<string, unknown> {
+export function buildClaim({ gvk, name, namespace, spec }: ClaimInput): Record<string, unknown> {
   const metadata: Record<string, unknown> = { name: name || "<app-name>" };
   if (namespace) metadata.namespace = namespace;
   return {
-    apiVersion: "cloud.ogenki.io/v1alpha1",
-    kind: "App",
+    apiVersion: gvk.apiVersion,
+    kind: gvk.kind,
     metadata,
     spec: prune(spec) ?? {},
   };

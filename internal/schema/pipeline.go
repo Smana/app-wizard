@@ -58,6 +58,11 @@ func (p *Pipeline) Build(ctx context.Context) (*api.SchemaPayload, error) {
 		return nil, err
 	}
 
+	gvk, err := ParseGVK(xrdDoc)
+	if err != nil {
+		return nil, err
+	}
+
 	hints, err := p.loadHints()
 	if err != nil {
 		return nil, err
@@ -74,6 +79,7 @@ func (p *Pipeline) Build(ctx context.Context) (*api.SchemaPayload, error) {
 		Hints:         hints,
 		Stacks:        stacks,
 		SchemaVersion: sha,
+		GVK:           gvk,
 	}
 
 	p.mu.Lock()
@@ -100,6 +106,15 @@ func (p *Pipeline) JSONSchema(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	return pl.JSONSchema, nil
+}
+
+// GVK returns the claim's group/version/kind derived from the XRD.
+func (p *Pipeline) GVK(ctx context.Context) (api.GVK, error) {
+	pl, err := p.Build(ctx)
+	if err != nil {
+		return api.GVK{}, err
+	}
+	return pl.GVK, nil
 }
 
 // SchemaVersion returns the current schema payload's SchemaVersion (the XRD

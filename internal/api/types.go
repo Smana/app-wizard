@@ -24,6 +24,16 @@ type SchemaPayload struct {
 	// SchemaVersion identifies the XRD revision the payload was built from
 	// (repo commit SHA), so the frontend can cache-bust on schema change.
 	SchemaVersion string `json:"schemaVersion"`
+	// GVK is the claim's group/version/kind, derived from the XRD (FR-001, no
+	// hardcoded values). The form's live claim and every generated manifest use
+	// it, so the wizard follows whatever the configured XRD declares.
+	GVK GVK `json:"gvk"`
+}
+
+// GVK is a claim's apiVersion (group/version) and kind, derived from the XRD.
+type GVK struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
 }
 
 // CELRule is one x-kubernetes-validations entry from the XRD.

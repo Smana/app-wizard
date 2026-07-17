@@ -22,9 +22,11 @@ type Validator interface {
 	Validate(ctx context.Context, spec map[string]any) (api.ValidateResponse, error)
 }
 
-// StackResolver resolves a stack name to its registry entry.
+// StackResolver resolves a stack name to its registry entry, and the claim GVK
+// derived from the XRD (both come from the schema pipeline).
 type StackResolver interface {
 	Stack(ctx context.Context, name string) (api.Stack, bool, error)
+	GVK(ctx context.Context) (api.GVK, error)
 }
 
 // GateError signals that the validate/render gates failed; the handler maps it
@@ -69,11 +71,16 @@ func (s *Service) Create(ctx context.Context, provider gitprovider.Provider, req
 		return api.PRResponse{}, &GateError{Message: fmt.Sprintf("unknown stack %q", req.Stack)}
 	}
 
+	gvk, err := s.stacks.GVK(ctx)
+	if err != nil {
+		return api.PRResponse{}, fmt.Errorf("resolve claim GVK: %w", err)
+	}
+
 	switch req.Mode {
 	case "", "create":
-		return s.create(ctx, provider, req, stack)
+		return s.create(ctx, provider, req, stack, gvk)
 	case "update":
-		return s.update(ctx, provider, req, stack)
+		return s.update(ctx, provider, req, stack, gvk)
 	case "delete":
 		return s.delete(ctx, provider, req, stack)
 	default:
@@ -93,7 +100,7 @@ func appPaths(stack, app string) (appPath, kustPath, parentKustPath string) {
 // create is the default new-app flow (three files). It refuses to clobber an
 // existing app (US-1.3): if apps/<stack>/<app>/app.yaml exists at base, it
 // returns a GateError directing the user to edit instead.
-func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req api.PRRequest, stack api.Stack) (api.PRResponse, error) {
+func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req api.PRRequest, stack api.Stack, gvk api.GVK) (api.PRResponse, error) {
 	appPath, kustPath, parentKustPath := appPaths(req.Stack, req.AppName)
 
 	// Guard: don't overwrite an existing app.
@@ -115,7 +122,7 @@ func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req
 	}
 
 	// Build claim + gate 2: render.
-	claimYAML, err := BuildClaimYAML(req.AppName, stack.Namespace, req.Spec)
+	claimYAML, err := BuildClaimYAML(gvk, req.AppName, stack.Namespace, req.Spec)
 	if err != nil {
 		return api.PRResponse{}, err
 	}
@@ -154,7 +161,7 @@ func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req
 // update edits an existing app via a structure-preserving patch of its
 // app.yaml. It requires the app to exist, runs the same validate + render gates,
 // and commits ONLY app.yaml (kustomizations already exist).
-func (s *Service) update(ctx context.Context, provider gitprovider.Provider, req api.PRRequest, stack api.Stack) (api.PRResponse, error) {
+func (s *Service) update(ctx context.Context, provider gitprovider.Provider, req api.PRRequest, stack api.Stack, gvk api.GVK) (api.PRResponse, error) {
 	appPath, _, _ := appPaths(req.Stack, req.AppName)
 
 	existing, _, err := provider.ReadFile(ctx, s.baseBranch, appPath)
@@ -176,7 +183,7 @@ func (s *Service) update(ctx context.Context, provider gitprovider.Provider, req
 	}
 
 	// Structure-preserving patch (SC-005): only changed fields diff.
-	patched, err := PatchClaimYAML(existing, req.Spec)
+	patched, err := PatchClaimYAML(gvk, existing, req.Spec)
 	if err != nil {
 		return api.PRResponse{}, err
 	}

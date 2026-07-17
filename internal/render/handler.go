@@ -10,9 +10,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// StackResolver resolves a stack name to its registry entry (for namespace).
+// StackResolver resolves a stack name to its registry entry (for namespace) and
+// the claim GVK derived from the XRD (both come from the schema pipeline).
 type StackResolver interface {
 	Stack(ctx context.Context, name string) (api.Stack, bool, error)
+	GVK(ctx context.Context) (api.GVK, error)
 }
 
 // Handler serves POST /api/render-preview. It builds a claim from the request
@@ -40,7 +42,13 @@ func Handler(r Renderer, stacks StackResolver) http.HandlerFunc {
 			namespace = s.Namespace
 		}
 
-		claimYAML, err := buildClaim(body.Name, namespace, body.Spec)
+		gvk, err := stacks.GVK(req.Context())
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		claimYAML, err := buildClaim(gvk, body.Name, namespace, body.Spec)
 		if err != nil {
 			httputil.WriteError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -55,7 +63,7 @@ func Handler(r Renderer, stacks StackResolver) http.HandlerFunc {
 	}
 }
 
-func buildClaim(name, namespace string, spec map[string]any) ([]byte, error) {
+func buildClaim(gvk api.GVK, name, namespace string, spec map[string]any) ([]byte, error) {
 	if spec == nil {
 		spec = map[string]any{}
 	}
@@ -64,8 +72,8 @@ func buildClaim(name, namespace string, spec map[string]any) ([]byte, error) {
 		meta["namespace"] = namespace
 	}
 	claim := map[string]any{
-		"apiVersion": "cloud.ogenki.io/v1alpha1",
-		"kind":       "App",
+		"apiVersion": gvk.APIVersion,
+		"kind":       gvk.Kind,
 		"metadata":   meta,
 		"spec":       spec,
 	}

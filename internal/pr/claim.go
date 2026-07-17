@@ -3,28 +3,25 @@ package pr
 import (
 	"fmt"
 
+	"github.com/Smana/app-wizard/internal/api"
 	"sigs.k8s.io/yaml"
 )
 
-const (
-	appAPIVersion = "cloud.ogenki.io/v1alpha1"
-	appKind       = "App"
-)
-
-// BuildClaimYAML assembles the App claim manifest from a request's parts. The
-// metadata name is the app name; namespace comes from the stack registry.
-// The spec is pruned (empty strings/arrays/objects/nulls removed) so the
-// committed claim stays minimal — only values the user actually set, letting the
-// composition/XRD supply the rest. Mirrors the frontend's live-pane prune.
-func BuildClaimYAML(name, namespace string, spec map[string]any) ([]byte, error) {
+// BuildClaimYAML assembles the claim manifest from a request's parts. The GVK is
+// derived from the XRD (FR-001), not hardcoded. The metadata name is the app
+// name; namespace comes from the stack registry. The spec is pruned (empty
+// strings/arrays/objects/nulls removed) so the committed claim stays minimal —
+// only values the user actually set, letting the composition/XRD supply the
+// rest. Mirrors the frontend's live-pane prune.
+func BuildClaimYAML(gvk api.GVK, name, namespace string, spec map[string]any) ([]byte, error) {
 	if pruned, ok := pruneSpec(spec); ok {
 		spec = pruned.(map[string]any)
 	} else {
 		spec = map[string]any{}
 	}
 	claim := map[string]any{
-		"apiVersion": appAPIVersion,
-		"kind":       appKind,
+		"apiVersion": gvk.APIVersion,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      name,
 			"namespace": namespace,

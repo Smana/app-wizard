@@ -106,8 +106,12 @@ func runGenerate(args []string) error {
 		return fmt.Errorf("spec is invalid")
 	}
 
-	// Build the claim.
-	claimYAML, err := pr.BuildClaimYAML(*appName, stack.Namespace, spec)
+	// Build the claim (GVK derived from the XRD).
+	gvk, err := pipeline.GVK(ctx)
+	if err != nil {
+		return fmt.Errorf("resolve claim GVK: %w", err)
+	}
+	claimYAML, err := pr.BuildClaimYAML(gvk, *appName, stack.Namespace, spec)
 	if err != nil {
 		return fmt.Errorf("build claim: %w", err)
 	}

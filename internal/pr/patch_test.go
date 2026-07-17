@@ -34,7 +34,7 @@ spec:
 		"customThing": "keep",
 	}
 
-	out, err := PatchClaimYAML(existing, desired)
+	out, err := PatchClaimYAML(testGVK, existing, desired)
 	if err != nil {
 		t.Fatalf("PatchClaimYAML: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestPatchClaimYAMLRemovesClearedKey(t *testing.T) {
 			"tag":        "1.0",
 		},
 	}
-	out, err := PatchClaimYAML(existing, desired)
+	out, err := PatchClaimYAML(testGVK, existing, desired)
 	if err != nil {
 		t.Fatalf("PatchClaimYAML: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestPatchClaimYAMLAppendsNewKey(t *testing.T) {
 		},
 		"replicas": 2,
 	}
-	out, err := PatchClaimYAML(existing, desired)
+	out, err := PatchClaimYAML(testGVK, existing, desired)
 	if err != nil {
 		t.Fatalf("PatchClaimYAML: %v", err)
 	}
@@ -133,7 +133,7 @@ metadata:
 	desired := map[string]any{
 		"image": map[string]any{"repository": "ghcr.io/acme/myapp", "tag": "1.0"},
 	}
-	out, err := PatchClaimYAML(existing, desired)
+	out, err := PatchClaimYAML(testGVK, existing, desired)
 	if err != nil {
 		t.Fatalf("PatchClaimYAML: %v", err)
 	}

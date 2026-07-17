@@ -7,6 +7,13 @@ export interface SchemaPayload {
   hints: UIHints;
   stacks: Stack[];
   schemaVersion: string;
+  gvk: GVK;
+}
+
+// GVK is the claim's apiVersion/kind, derived from the XRD (never hardcoded).
+export interface GVK {
+  apiVersion: string;
+  kind: string;
 }
 
 export interface CELRule {

@@ -10,13 +10,57 @@ import (
 // xrd is the minimal shape we parse out of the App XRD document.
 type xrd struct {
 	Spec struct {
+		Group string `json:"group"`
+		Names struct {
+			Kind string `json:"kind"`
+		} `json:"names"`
+		ClaimNames struct {
+			Kind string `json:"kind"`
+		} `json:"claimNames"`
 		Versions []struct {
 			Name   string `json:"name"`
+			Served bool   `json:"served"`
 			Schema struct {
 				OpenAPIV3Schema map[string]any `json:"openAPIV3Schema"`
 			} `json:"schema"`
 		} `json:"versions"`
 	} `json:"spec"`
+}
+
+// ParseGVK derives the claim's group/version/kind from the XRD (FR-001): the
+// apiVersion is spec.group + the first served version, and the kind is
+// spec.claimNames.kind when the XRD defines a claim (Crossplane v1), else
+// spec.names.kind (v2 namespaced XR). No value is hardcoded, so the wizard
+// tracks whatever XRD it is pointed at.
+func ParseGVK(doc []byte) (api.GVK, error) {
+	var x xrd
+	if err := yaml.Unmarshal(doc, &x); err != nil {
+		return api.GVK{}, fmt.Errorf("parse XRD: %w", err)
+	}
+	if x.Spec.Group == "" {
+		return api.GVK{}, fmt.Errorf("XRD has no spec.group")
+	}
+	version := ""
+	for _, v := range x.Spec.Versions {
+		if v.Served {
+			version = v.Name
+			break
+		}
+	}
+	if version == "" && len(x.Spec.Versions) > 0 {
+		version = x.Spec.Versions[0].Name
+	}
+	if version == "" {
+		return api.GVK{}, fmt.Errorf("XRD has no versions")
+	}
+	kind := x.Spec.ClaimNames.Kind
+	if kind == "" {
+		kind = x.Spec.Names.Kind
+	}
+	if kind == "" {
+		return api.GVK{}, fmt.Errorf("XRD has neither claimNames.kind nor names.kind")
+	}
+	return api.GVK{APIVersion: x.Spec.Group + "/" + version, Kind: kind}, nil
 }
 
 // ConvertXRD parses the App XRD YAML and returns the JSON Schema (draft

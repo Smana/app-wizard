@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Smana/app-wizard/internal/api"
 	yaml "go.yaml.in/yaml/v3"
 )
 
@@ -24,7 +25,7 @@ import (
 // When existing has no parseable top-level `spec:` mapping, it falls back to a
 // full BuildClaimYAML generation, preserving metadata.name / .namespace and the
 // apiVersion from the existing document when present.
-func PatchClaimYAML(existing []byte, desiredSpec map[string]any) ([]byte, error) {
+func PatchClaimYAML(gvk api.GVK, existing []byte, desiredSpec map[string]any) ([]byte, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(existing, &doc); err != nil {
 		return nil, fmt.Errorf("parse existing claim: %w", err)
@@ -33,7 +34,7 @@ func PatchClaimYAML(existing []byte, desiredSpec map[string]any) ([]byte, error)
 	root := documentRoot(&doc)
 	specNode := mappingValue(root, "spec")
 	if specNode == nil || specNode.Kind != yaml.MappingNode {
-		return patchFallback(existing, desiredSpec)
+		return patchFallback(gvk, existing, desiredSpec)
 	}
 
 	applyMapping(specNode, desiredSpec)
@@ -197,14 +198,21 @@ func marshalNode(n *yaml.Node) ([]byte, error) {
 }
 
 // patchFallback regenerates the claim from scratch when the existing document
-// has no usable spec mapping. It preserves metadata.name/.namespace and
-// apiVersion from the existing document when present.
-func patchFallback(existing []byte, desiredSpec map[string]any) ([]byte, error) {
+// has no usable spec mapping. It preserves metadata.name/.namespace and the
+// apiVersion/kind from the existing document when present, falling back to the
+// XRD-derived gvk otherwise (FR-001).
+func patchFallback(gvk api.GVK, existing []byte, desiredSpec map[string]any) ([]byte, error) {
 	name, namespace := "", ""
 	if len(existing) > 0 {
 		var doc yaml.Node
 		if err := yaml.Unmarshal(existing, &doc); err == nil {
 			if root := documentRoot(&doc); root != nil {
+				if n := mappingValue(root, "apiVersion"); n != nil && n.Value != "" {
+					gvk.APIVersion = n.Value
+				}
+				if n := mappingValue(root, "kind"); n != nil && n.Value != "" {
+					gvk.Kind = n.Value
+				}
 				if meta := mappingValue(root, "metadata"); meta != nil {
 					if n := mappingValue(meta, "name"); n != nil {
 						name = n.Value
@@ -216,5 +224,5 @@ func patchFallback(existing []byte, desiredSpec map[string]any) ([]byte, error) 
 			}
 		}
 	}
-	return BuildClaimYAML(name, namespace, desiredSpec)
+	return BuildClaimYAML(gvk, name, namespace, desiredSpec)
 }

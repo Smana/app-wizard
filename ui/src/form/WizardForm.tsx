@@ -152,8 +152,8 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
   // (only values you set); the full effective resources (with composition
   // defaults like resources/limits) are shown by the render Preview below.
   const yamlText = useMemo(
-    () => claimToYaml({ name, namespace, spec }),
-    [name, namespace, spec],
+    () => claimToYaml({ gvk: schema.gvk, name, namespace, spec }),
+    [schema.gvk, name, namespace, spec],
   );
 
   // Live validation (FR-002): debounce the spec and POST /api/validate.
