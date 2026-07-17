@@ -39,7 +39,7 @@ func validService() *Service {
 		{Kind: "Deployment", Name: "xplane-myapp"},
 		{Kind: "Service", Name: "xplane-myapp"},
 	}}
-	return NewService(v, r, fakeStacks{}, "main", "")
+	return NewService(v, r, fakeStacks{}, "main", "", true)
 }
 
 func newReq() api.PRRequest {
@@ -182,7 +182,7 @@ func TestCreateIdempotentWithExistingParent(t *testing.T) {
 func TestCreateBlockedByValidationGate(t *testing.T) {
 	v := fakeValidator{resp: api.ValidateResponse{Valid: false, CELViolations: []api.CELRule{{Message: "bad"}}}}
 	r := &render.FakeRenderer{}
-	s := NewService(v, r, fakeStacks{}, "main", "")
+	s := NewService(v, r, fakeStacks{}, "main", "", true)
 	fp := gitprovider.NewFakeProvider()
 
 	_, err := s.Create(context.Background(), fp, newReq())
@@ -223,7 +223,7 @@ func TestCreateUnknownStack(t *testing.T) {
 func TestCreateCustomLayout(t *testing.T) {
 	v := fakeValidator{resp: api.ValidateResponse{Valid: true}}
 	r := &render.FakeRenderer{Resources: []api.RenderedResource{{Kind: "Deployment", Name: "x"}}}
-	s := NewService(v, r, fakeStacks{}, "main", "workloads/{stack}/{app}")
+	s := NewService(v, r, fakeStacks{}, "main", "workloads/{stack}/{app}", true)
 	fp := gitprovider.NewFakeProvider()
 
 	if _, err := s.Create(context.Background(), fp, newReq()); err != nil {
@@ -241,6 +241,30 @@ func TestCreateCustomLayout(t *testing.T) {
 		if !got[want] {
 			t.Errorf("missing %q; got %v", want, got)
 		}
+	}
+}
+
+// TestCreateRenderDisabled proves FR-005: with render disabled, the PR is still
+// created (three files) but the renderer is never called and no render comment
+// is posted.
+func TestCreateRenderDisabled(t *testing.T) {
+	v := fakeValidator{resp: api.ValidateResponse{Valid: true}}
+	r := &render.FakeRenderer{Resources: []api.RenderedResource{{Kind: "Deployment", Name: "x"}}}
+	s := NewService(v, r, fakeStacks{}, "main", "", false)
+	fp := gitprovider.NewFakeProvider()
+
+	resp, err := s.Create(context.Background(), fp, newReq())
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if len(fp.Commits) != 1 || len(fp.Commits[0].Files) != 3 {
+		t.Fatalf("expected 1 commit with 3 files, got %d commits", len(fp.Commits))
+	}
+	if len(r.Calls) != 0 {
+		t.Errorf("renderer called despite render disabled")
+	}
+	if len(fp.Comments[resp.Number]) != 0 {
+		t.Errorf("render comment posted despite render disabled: %v", fp.Comments[resp.Number])
 	}
 }
 

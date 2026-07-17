@@ -145,7 +145,7 @@ func TestConvertXRDErrors(t *testing.T) {
 func TestPipelineBuildAndCache(t *testing.T) {
 	root := repoRoot(t)
 	src := NewLocalSource(root)
-	p := NewPipeline(src, xrdPath, "apps/stacks.yaml", filepath.Join(root, "container-images/app-wizard/ui-hints.yaml"))
+	p := NewPipeline(src, xrdPath, "apps/stacks.yaml", filepath.Join(root, "container-images/app-wizard/ui-hints.yaml"), true)
 
 	payload, err := p.Build(context.Background())
 	if err != nil {

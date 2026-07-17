@@ -450,9 +450,13 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="outline" onClick={onPreview} disabled={previewing}>
-            {previewing ? "Rendering…" : "Preview"}
-          </Button>
+          {/* Preview affordance is hidden when the render preview is disabled on
+              this deployment (FR-005); validation + Open PR still work. */}
+          {schema.renderEnabled && (
+            <Button type="button" variant="outline" onClick={onPreview} disabled={previewing}>
+              {previewing ? "Rendering…" : "Preview"}
+            </Button>
+          )}
           <Button type="button" onClick={onOpenPR} disabled={blocked || submitting}>
             {submitting
               ? isEdit

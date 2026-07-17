@@ -40,20 +40,23 @@ func (e *GateError) Error() string { return e.Message }
 
 // Service opens create PRs.
 type Service struct {
-	validator  Validator
-	renderer   render.Renderer
-	stacks     StackResolver
-	baseBranch string
-	layout     string
+	validator     Validator
+	renderer      render.Renderer
+	stacks        StackResolver
+	baseBranch    string
+	layout        string
+	renderEnabled bool
 }
 
 // NewService builds the PR service. layout is the file-layout template for a new
 // app directory ({stack}/{app} tokens); empty falls back to "apps/{stack}/{app}".
-func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch, layout string) *Service {
+// renderEnabled gates the crossplane render gate + PR comment (FR-005): when
+// false, validate + PR still run, only the render preview/comment are omitted.
+func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch, layout string, renderEnabled bool) *Service {
 	if layout == "" {
 		layout = "apps/{stack}/{app}"
 	}
-	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch, layout: layout}
+	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch, layout: layout, renderEnabled: renderEnabled}
 }
 
 // Create runs the requested operation (create/update/delete) and, on success,
@@ -112,6 +115,20 @@ func expandLayout(layout, stack, app string) string {
 	return path.Clean(strings.NewReplacer("{stack}", stack, "{app}", app).Replace(layout))
 }
 
+// render runs the crossplane render gate, or returns nil resources when render
+// is disabled (FR-005) — commitAndPR skips the render comment on nil resources,
+// so PR creation proceeds without a preview. A render error is a gate failure.
+func (s *Service) render(ctx context.Context, claimYAML []byte) ([]api.RenderedResource, error) {
+	if !s.renderEnabled {
+		return nil, nil
+	}
+	resources, err := s.renderer.Render(ctx, claimYAML)
+	if err != nil {
+		return nil, &GateError{Message: "render failed: " + err.Error()}
+	}
+	return resources, nil
+}
+
 // create is the default new-app flow (three files). It refuses to clobber an
 // existing app (US-1.3): if apps/<stack>/<app>/app.yaml exists at base, it
 // returns a GateError directing the user to edit instead.
@@ -141,9 +158,9 @@ func (s *Service) create(ctx context.Context, provider gitprovider.Provider, req
 	if err != nil {
 		return api.PRResponse{}, err
 	}
-	resources, err := s.renderer.Render(ctx, claimYAML)
+	resources, err := s.render(ctx, claimYAML)
 	if err != nil {
-		return api.PRResponse{}, &GateError{Message: "render failed: " + err.Error()}
+		return api.PRResponse{}, err
 	}
 
 	kustYAML, err := BuildKustomizationYAML()
@@ -203,10 +220,10 @@ func (s *Service) update(ctx context.Context, provider gitprovider.Provider, req
 		return api.PRResponse{}, err
 	}
 
-	// Gate 2: render the patched claim.
-	resources, err := s.renderer.Render(ctx, patched)
+	// Gate 2: render the patched claim (skipped when render is disabled).
+	resources, err := s.render(ctx, patched)
 	if err != nil {
-		return api.PRResponse{}, &GateError{Message: "render failed: " + err.Error()}
+		return api.PRResponse{}, err
 	}
 
 	files := []gitprovider.File{{Path: appPath, Content: patched}}

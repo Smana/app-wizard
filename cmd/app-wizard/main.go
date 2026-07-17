@@ -61,7 +61,7 @@ func main() {
 		logger.Info("XRD_SOURCE=github requested; using LocalSource for server-side reads (per-user tokens are request-scoped)")
 	}
 
-	pipeline := schema.NewPipeline(src, cfg.XRDPath, cfg.StacksPath, cfg.UIHintsPath)
+	pipeline := schema.NewPipeline(src, cfg.XRDPath, cfg.StacksPath, cfg.UIHintsPath, cfg.RenderEnabled)
 
 	// Warm the cache / fail fast on a broken XRD.
 	if _, err := pipeline.Build(ctx); err != nil {
@@ -71,7 +71,7 @@ func main() {
 
 	validator := validate.NewValidator(pipeline)
 	renderer := render.NewCrossplaneRenderer(cfg.RepoRoot, cfg.CompositionPath, cfg.FunctionsPath, cfg.EnvConfigPath, cfg.FunctionsDevTargets)
-	prService := pr.NewService(validator, renderer, pipeline, cfg.RepoBaseBranch, cfg.Layout)
+	prService := pr.NewService(validator, renderer, pipeline, cfg.RepoBaseBranch, cfg.Layout, cfg.RenderEnabled)
 	appStore := appstore.New(pipeline, cfg.RepoBaseBranch)
 
 	// LLM assists (Phase 3, FR-011). Available when an API key or a base URL
@@ -134,7 +134,7 @@ func main() {
 	// Schema / validation / render.
 	mux.Handle("GET /api/schema", pipeline.Handler())
 	mux.Handle("POST /api/validate", validator.Handler())
-	mux.Handle("POST /api/render-preview", render.Handler(renderer, pipeline))
+	mux.Handle("POST /api/render-preview", render.Handler(renderer, pipeline, cfg.RenderEnabled))
 
 	// LLM assists (optional; same public surface as validate — no git provider).
 	mux.HandleFunc("GET /api/assist/status", assistHandlers.Status)

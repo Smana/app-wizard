@@ -28,6 +28,9 @@ type SchemaPayload struct {
 	// hardcoded values). The form's live claim and every generated manifest use
 	// it, so the wizard follows whatever the configured XRD declares.
 	GVK GVK `json:"gvk"`
+	// RenderEnabled reports whether the crossplane render preview is available
+	// (FR-005), so the form can hide the preview affordance when it is off.
+	RenderEnabled bool `json:"renderEnabled"`
 }
 
 // GVK is a claim's apiVersion (group/version) and kind, derived from the XRD.

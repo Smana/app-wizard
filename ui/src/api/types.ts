@@ -8,6 +8,7 @@ export interface SchemaPayload {
   stacks: Stack[];
   schemaVersion: string;
   gvk: GVK;
+  renderEnabled: boolean;
 }
 
 // GVK is the claim's apiVersion/kind, derived from the XRD (never hardcoded).

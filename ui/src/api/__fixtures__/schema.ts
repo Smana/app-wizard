@@ -9,6 +9,7 @@ import type { SchemaPayload } from "../types";
 export const fixtureSchema: SchemaPayload = {
   schemaVersion: "fixture-v1",
   gvk: { apiVersion: "example.com/v1beta1", kind: "App" },
+  renderEnabled: true,
   stacks: [
     {
       name: "dev",

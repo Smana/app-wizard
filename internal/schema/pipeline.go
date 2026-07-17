@@ -17,24 +17,27 @@ import (
 // SchemaSource (offline-testable via LocalSource); ui-hints.yaml is read from
 // disk because it is bundled with the wizard, not the GitOps repo.
 type Pipeline struct {
-	src         SchemaSource
-	xrdPath     string
-	stacksPath  string
-	uiHintsPath string
+	src           SchemaSource
+	xrdPath       string
+	stacksPath    string
+	uiHintsPath   string
+	renderEnabled bool
 
 	mu    sync.Mutex
 	cache map[string]*api.SchemaPayload // keyed by XRD SHA
 }
 
 // NewPipeline builds a pipeline. uiHintsPath is an on-disk path; xrdPath and
-// stacksPath are resolved through src.
-func NewPipeline(src SchemaSource, xrdPath, stacksPath, uiHintsPath string) *Pipeline {
+// stacksPath are resolved through src. renderEnabled is surfaced in the payload
+// so the form knows whether the render preview affordance is available.
+func NewPipeline(src SchemaSource, xrdPath, stacksPath, uiHintsPath string, renderEnabled bool) *Pipeline {
 	return &Pipeline{
-		src:         src,
-		xrdPath:     xrdPath,
-		stacksPath:  stacksPath,
-		uiHintsPath: uiHintsPath,
-		cache:       map[string]*api.SchemaPayload{},
+		src:           src,
+		xrdPath:       xrdPath,
+		stacksPath:    stacksPath,
+		uiHintsPath:   uiHintsPath,
+		renderEnabled: renderEnabled,
+		cache:         map[string]*api.SchemaPayload{},
 	}
 }
 
@@ -80,6 +83,7 @@ func (p *Pipeline) Build(ctx context.Context) (*api.SchemaPayload, error) {
 		Stacks:        stacks,
 		SchemaVersion: sha,
 		GVK:           gvk,
+		RenderEnabled: p.renderEnabled,
 	}
 
 	p.mu.Lock()

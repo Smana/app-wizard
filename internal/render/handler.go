@@ -19,9 +19,14 @@ type StackResolver interface {
 
 // Handler serves POST /api/render-preview. It builds a claim from the request
 // and returns the rendered resources; render failures return ok=false with the
-// error rather than an HTTP error (FR-008).
-func Handler(r Renderer, stacks StackResolver) http.HandlerFunc {
+// error rather than an HTTP error (FR-008). When enabled is false the preview is
+// off (FR-005) and every request returns ok=false with a disabled message.
+func Handler(r Renderer, stacks StackResolver, enabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		if !enabled {
+			httputil.WriteJSON(w, http.StatusOK, api.RenderPreviewResponse{OK: false, Error: "render preview is disabled on this deployment"})
+			return
+		}
 		var body api.RenderPreviewRequest
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid request body: "+err.Error())

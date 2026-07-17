@@ -72,7 +72,7 @@ func runGenerate(args []string) error {
 
 	// Same components the server wires, but with a LocalSource (offline).
 	src := schema.NewLocalSource(root)
-	pipeline := schema.NewPipeline(src, cfg.XRDPath, cfg.StacksPath, cfg.UIHintsPath)
+	pipeline := schema.NewPipeline(src, cfg.XRDPath, cfg.StacksPath, cfg.UIHintsPath, cfg.RenderEnabled)
 	if _, err := pipeline.Build(ctx); err != nil {
 		return fmt.Errorf("build schema (is -repo-root correct?): %w", err)
 	}
