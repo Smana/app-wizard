@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/config"
+	"github.com/Smana/app-wizard/internal/config"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 )

@@ -10,11 +10,11 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/config"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/pr"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/render"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/schema"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/validate"
+	"github.com/Smana/app-wizard/internal/config"
+	"github.com/Smana/app-wizard/internal/pr"
+	"github.com/Smana/app-wizard/internal/render"
+	"github.com/Smana/app-wizard/internal/schema"
+	"github.com/Smana/app-wizard/internal/validate"
 )
 
 // runGenerate implements `app-wizard generate` — the offline dry-run of the PR

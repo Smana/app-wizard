@@ -8,7 +8,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/api"
 )
 
 // resolvePath reports whether a dotted field key (e.g. "image.repository",

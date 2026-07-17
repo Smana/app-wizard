@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/api"
 )
 
 // fakeProvider is a static SchemaProvider for validator tests.

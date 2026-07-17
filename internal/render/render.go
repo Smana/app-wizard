@@ -7,7 +7,7 @@ package render
 import (
 	"context"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/api"
 )
 
 // Renderer renders a claim YAML into the list of resources it would create.

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/httputil"
+	"github.com/Smana/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/httputil"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 

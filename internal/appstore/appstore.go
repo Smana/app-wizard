@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/gitprovider"
 	"sigs.k8s.io/yaml"
 )
 

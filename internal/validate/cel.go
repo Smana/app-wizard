@@ -3,7 +3,7 @@ package validate
 import (
 	"fmt"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/api"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"

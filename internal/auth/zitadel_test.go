@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/gitprovider"
 )
 
 // fakeVerifier is a stand-in for the go-oidc verifier so the session/authz/link

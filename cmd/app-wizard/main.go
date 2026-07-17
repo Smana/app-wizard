@@ -13,16 +13,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/appstore"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/assist"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/auth"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/config"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/gitprovider"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/pr"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/render"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/schema"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/validate"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/web"
+	"github.com/Smana/app-wizard/internal/appstore"
+	"github.com/Smana/app-wizard/internal/assist"
+	"github.com/Smana/app-wizard/internal/auth"
+	"github.com/Smana/app-wizard/internal/config"
+	"github.com/Smana/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/pr"
+	"github.com/Smana/app-wizard/internal/render"
+	"github.com/Smana/app-wizard/internal/schema"
+	"github.com/Smana/app-wizard/internal/validate"
+	"github.com/Smana/app-wizard/internal/web"
 )
 
 func main() {

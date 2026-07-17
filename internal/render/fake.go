@@ -3,7 +3,7 @@ package render
 import (
 	"context"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/api"
 )
 
 // FakeRenderer is a deterministic Renderer for tests. It returns Resources (or

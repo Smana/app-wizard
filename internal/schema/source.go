@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/gitprovider"
 )
 
 // SchemaSource reads repo files for the pipeline. Two implementations:

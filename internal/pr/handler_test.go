@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/auth"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/auth"
+	"github.com/Smana/app-wizard/internal/gitprovider"
 )
 
 // TestHandler_GitHubNotLinked maps the zitadel-mode "no linked GitHub token"

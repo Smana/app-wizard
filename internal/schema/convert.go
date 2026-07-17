@@ -3,7 +3,7 @@ package schema
 import (
 	"fmt"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/api"
 	"sigs.k8s.io/yaml"
 )
 

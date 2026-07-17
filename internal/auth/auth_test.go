@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/gitprovider"
 )
 
 func newTestAuth(dev gitprovider.Provider) *Auth {

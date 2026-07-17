@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/api"
-	"github.com/Smana/cloud-native-ref/container-images/app-wizard/internal/httputil"
+	"github.com/Smana/app-wizard/internal/api"
+	"github.com/Smana/app-wizard/internal/httputil"
 )
 
 // schemaProvider yields the App JSON Schema and the networkPolicies subschema.

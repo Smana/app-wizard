@@ -1,4 +1,4 @@
-module github.com/Smana/cloud-native-ref/container-images/app-wizard
+module github.com/Smana/app-wizard
 
 go 1.26
 
