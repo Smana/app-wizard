@@ -1,15 +1,20 @@
-// Package config loads the app-wizard runtime configuration from the
-// environment. All values have local-dev-friendly defaults so `go run` works
-// without any setup; secrets (OAuth client secret, session key) come from the
-// environment only and are never logged.
+// Package config loads the app-wizard runtime configuration from an optional
+// wizard.yaml file overlaid by the environment (defaults → file → env). All
+// values have local-dev-friendly defaults so `go run` works without any setup;
+// secrets (OAuth client secret, session key, LLM key) come from the environment
+// only, are rejected if present in the file, and are never logged.
 package config
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	yaml "go.yaml.in/yaml/v3"
 )
 
 // XRDSourceMode selects where the schema pipeline reads repo files from.
@@ -92,6 +97,23 @@ type Config struct {
 	// LLMModel is the model id used for assists (LLM_MODEL, default
 	// "claude-opus-4-8").
 	LLMModel string
+
+	// --- Agnostic-deployment knobs (SPEC-009). Introduced by the config-file
+	// layer (T005); the behaviour that consumes them lands in later tasks:
+	// Layout → T007, RenderEnabled → T009, Branding* → T008. Defaults reproduce
+	// today's behaviour so they are inert until wired. ---
+
+	// Layout is the PR file-layout template for a new app directory. Tokens
+	// {stack} and {app} expand to the chosen stack and app name (LAYOUT).
+	Layout string
+	// RenderEnabled gates the crossplane render preview (RENDER_ENABLED). When
+	// false the wizard still validates and opens PRs, without the preview.
+	RenderEnabled bool
+	// BrandingTitle / BrandingLogoURL / BrandingTheme drive the SPA chrome
+	// (BRAND_TITLE / BRAND_LOGO_URL; theme is file-only). Neutral by default.
+	BrandingTitle   string
+	BrandingLogoURL string
+	BrandingTheme   map[string]string
 }
 
 // AssistsAvailable reports whether LLM assists are configured: either an API
@@ -100,29 +122,43 @@ func (c *Config) AssistsAvailable() bool {
 	return c.LLMAPIKey != "" || c.LLMBaseURL != ""
 }
 
-// Load resolves configuration from the environment, applying defaults.
+// Load resolves configuration with precedence defaults → wizard.yaml → env
+// (env wins, 12-factor). The config file is optional: when WIZARD_CONFIG is
+// unset and the default path is absent, Load behaves exactly as the pure-env
+// path did. Secrets are environment-only and are rejected if present in the
+// file (FR-002, fail closed).
 func Load() (*Config, error) {
+	fc, err := loadFile()
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
-		ListenAddr:          env("LISTEN_ADDR", ":8080"),
-		AuthMode:            strings.ToLower(env("AUTH_MODE", "github")),
+		ListenAddr:          pick("LISTEN_ADDR", "", ":8080"),
+		AuthMode:            strings.ToLower(pick("AUTH_MODE", fc.Auth.Mode, "github")),
 		GitHubClientID:      os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubClientSecret:  os.Getenv("GITHUB_CLIENT_SECRET"),
-		OAuthRedirectURL:    env("OAUTH_REDIRECT_URL", "http://localhost:8080/api/auth/callback"),
-		RepoOwner:           env("REPO_OWNER", "Smana"),
-		RepoName:            env("REPO_NAME", "cloud-native-ref"),
-		RepoBaseBranch:      env("REPO_BASE_BRANCH", "main"),
-		XRDSource:           XRDSourceMode(strings.ToLower(env("XRD_SOURCE", string(SourceLocal)))),
-		RepoRoot:            env("REPO_ROOT", defaultRepoRoot()),
-		XRDPath:             env("XRD_PATH", "infrastructure/base/crossplane/configuration/app-definition.yaml"),
-		UIHintsPath:         os.Getenv("UI_HINTS_PATH"),
-		StacksPath:          env("STACKS_PATH", "apps/stacks.yaml"),
-		CompositionPath:     env("COMPOSITION_PATH", "infrastructure/base/crossplane/configuration/app-composition.yaml"),
-		FunctionsPath:       env("FUNCTIONS_PATH", "infrastructure/base/crossplane/configuration/functions.yaml"),
-		EnvConfigPath:       env("ENVCONFIG_PATH", "infrastructure/base/crossplane/configuration/environmentconfig.yaml"),
+		OAuthRedirectURL:    pick("OAUTH_REDIRECT_URL", fc.Auth.RedirectURL, "http://localhost:8080/api/auth/callback"),
+		RepoOwner:           pick("REPO_OWNER", fc.Repo.Owner, "Smana"),
+		RepoName:            pick("REPO_NAME", fc.Repo.Name, "cloud-native-ref"),
+		RepoBaseBranch:      pick("REPO_BASE_BRANCH", fc.Repo.BaseBranch, "main"),
+		XRDSource:           XRDSourceMode(strings.ToLower(pick("XRD_SOURCE", "", string(SourceLocal)))),
+		RepoRoot:            pick("REPO_ROOT", "", defaultRepoRoot()),
+		XRDPath:             pick("XRD_PATH", fc.Schema.XRDPath, "infrastructure/base/crossplane/configuration/app-definition.yaml"),
+		UIHintsPath:         pick("UI_HINTS_PATH", fc.Schema.UIHintsPath, ""),
+		StacksPath:          pick("STACKS_PATH", fc.Schema.StacksPath, "apps/stacks.yaml"),
+		CompositionPath:     pick("COMPOSITION_PATH", fc.Render.CompositionPath, "infrastructure/base/crossplane/configuration/app-composition.yaml"),
+		FunctionsPath:       pick("FUNCTIONS_PATH", fc.Render.FunctionsPath, "infrastructure/base/crossplane/configuration/functions.yaml"),
+		EnvConfigPath:       pick("ENVCONFIG_PATH", fc.Render.EnvConfigPath, "infrastructure/base/crossplane/configuration/environmentconfig.yaml"),
 		LLMAPIKey:           os.Getenv("LLM_API_KEY"),
-		LLMBaseURL:          os.Getenv("LLM_BASE_URL"),
-		LLMModel:            env("LLM_MODEL", "claude-opus-4-8"),
-		FunctionsDevTargets: parseKVList(os.Getenv("FUNCTIONS_DEV_TARGETS")),
+		LLMBaseURL:          pick("LLM_BASE_URL", fc.Assists.BaseURL, ""),
+		LLMModel:            pick("LLM_MODEL", fc.Assists.Model, "claude-opus-4-8"),
+		FunctionsDevTargets: parseKVList(pick("FUNCTIONS_DEV_TARGETS", fc.Render.FunctionsDevTargets, "")),
+		Layout:              pick("LAYOUT", fc.Layout, "apps/{stack}/{app}"),
+		RenderEnabled:       pickBool("RENDER_ENABLED", fc.Render.Enabled, true),
+		BrandingTitle:       pick("BRAND_TITLE", fc.Branding.Title, "App Wizard"),
+		BrandingLogoURL:     pick("BRAND_LOGO_URL", fc.Branding.LogoURL, ""),
+		BrandingTheme:       fc.Branding.Theme,
 	}
 
 	if cfg.XRDSource != SourceLocal && cfg.XRDSource != SourceGitHub {
@@ -130,8 +166,7 @@ func Load() (*Config, error) {
 	}
 
 	if cfg.UIHintsPath == "" {
-		// ui-hints.yaml lives beside the binary/source in
-		// container-images/app-wizard, i.e. the working directory.
+		// ui-hints.yaml defaults beside the working directory.
 		cfg.UIHintsPath = filepath.Join(defaultRepoRoot(), "ui-hints.yaml")
 	}
 
@@ -148,11 +183,148 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// pick returns the first non-empty of: env[key], fileVal, def. This is how the
+// defaults → file → env precedence is applied per string field.
+func pick(key, fileVal, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	if fileVal != "" {
+		return fileVal
+	}
+	return def
+}
+
+// pickBool applies the same precedence to a bool. The file value is a *bool so
+// an explicit `false` in the file is distinguishable from "unset".
+func pickBool(key string, fileVal *bool, def bool) bool {
+	if v := os.Getenv(key); v != "" {
+		return v == "1" || strings.EqualFold(v, "true")
+	}
+	if fileVal != nil {
+		return *fileVal
+	}
+	return def
+}
+
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
 	return def
+}
+
+// fileConfig mirrors wizard.yaml. Only non-secret knobs live here; secrets are
+// environment-only (loadFile rejects them). Strict decoding (KnownFields) makes
+// an unknown key — a typo or a secret — fail the load rather than be ignored.
+type fileConfig struct {
+	Repo struct {
+		Owner      string `yaml:"owner"`
+		Name       string `yaml:"name"`
+		BaseBranch string `yaml:"baseBranch"`
+	} `yaml:"repo"`
+	Schema struct {
+		XRDPath     string `yaml:"xrdPath"`
+		UIHintsPath string `yaml:"uiHintsPath"`
+		StacksPath  string `yaml:"stacksPath"`
+	} `yaml:"schema"`
+	Layout string `yaml:"layout"`
+	Render struct {
+		Enabled             *bool  `yaml:"enabled"`
+		CompositionPath     string `yaml:"compositionPath"`
+		FunctionsPath       string `yaml:"functionsPath"`
+		EnvConfigPath       string `yaml:"envConfigPath"`
+		FunctionsDevTargets string `yaml:"functionsDevTargets"`
+	} `yaml:"render"`
+	Branding struct {
+		Title   string            `yaml:"title"`
+		LogoURL string            `yaml:"logoUrl"`
+		Theme   map[string]string `yaml:"theme"`
+	} `yaml:"branding"`
+	Assists struct {
+		Model   string `yaml:"model"`
+		BaseURL string `yaml:"baseUrl"`
+	} `yaml:"assists"`
+	Auth struct {
+		Mode        string `yaml:"mode"`
+		RedirectURL string `yaml:"redirectUrl"`
+	} `yaml:"auth"`
+}
+
+// loadFile reads wizard.yaml. Path from WIZARD_CONFIG, default
+// /config/wizard.yaml. Absent + unset ⇒ zero fileConfig (pure-env path). Absent
+// but WIZARD_CONFIG explicitly set ⇒ error (a mount that didn't land is a bug,
+// not a silent fallback to ogenki defaults on someone else's platform).
+func loadFile() (fileConfig, error) {
+	var fc fileConfig
+	path := os.Getenv("WIZARD_CONFIG")
+	explicit := path != ""
+	if !explicit {
+		path = "/config/wizard.yaml"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) && !explicit {
+			return fc, nil
+		}
+		return fc, fmt.Errorf("read config %s: %w", path, err)
+	}
+	if err := rejectSecrets(data, path); err != nil {
+		return fc, err
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&fc); err != nil {
+		return fc, fmt.Errorf("parse config %s: %w", path, err)
+	}
+	return fc, nil
+}
+
+// secretKeys are configuration keys that must never appear in wizard.yaml —
+// they carry credentials and are environment-only (NFR-002). Compared after
+// lowercasing and stripping '_' and '-', so githubClientSecret,
+// GITHUB_CLIENT_SECRET, and github-client-secret all match.
+var secretKeys = map[string]bool{
+	"githubclientsecret": true,
+	"sessionkey":         true,
+	"llmapikey":          true,
+	"clientsecret":       true,
+	"secret":             true,
+	"secrets":            true,
+}
+
+// rejectSecrets fails the load if any secret-bearing key appears anywhere in the
+// file, with a clear message pointing at the environment. This is the explicit,
+// friendly guard; strict decoding is the backstop for everything else.
+func rejectSecrets(data []byte, path string) error {
+	var raw any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parse config %s: %w", path, err)
+	}
+	var found string
+	var walk func(node any)
+	walk = func(node any) {
+		if found != "" {
+			return
+		}
+		m, ok := node.(map[string]any)
+		if !ok {
+			return
+		}
+		for k, v := range m {
+			norm := strings.NewReplacer("_", "", "-", "").Replace(strings.ToLower(k))
+			if secretKeys[norm] {
+				found = k
+				return
+			}
+			walk(v)
+		}
+	}
+	walk(raw)
+	if found != "" {
+		return fmt.Errorf("config %s: secret-bearing key %q is not allowed in the file — supply secrets via the environment (GITHUB_CLIENT_SECRET, SESSION_KEY, LLM_API_KEY)", path, found)
+	}
+	return nil
 }
 
 // parseKVList parses "k=v,k=v" into a map. Empty/malformed entries are skipped.
