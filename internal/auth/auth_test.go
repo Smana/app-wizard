@@ -40,9 +40,8 @@ func seedAuthToken(t *testing.T, a *Auth, token string) *http.Request {
 	return out
 }
 
-// TestGitHubModeProviderForRequest confirms github mode is unchanged: a linked
-// token yields a provider; no token yields ErrUnauthenticated (never the
-// zitadel-only ErrGitHubNotLinked sentinel).
+// TestGitHubModeProviderForRequest confirms a session token yields a provider,
+// and no token yields ErrUnauthenticated.
 func TestGitHubModeProviderForRequest(t *testing.T) {
 	a := newTestAuth(nil)
 

@@ -138,5 +138,4 @@ export interface User {
   login: string;
   avatarUrl: string;
   name: string;
-  githubLinked: boolean; // zitadel mode: has the user connected a GitHub token for PRs
 }

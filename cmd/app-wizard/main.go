@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/Smana/app-wizard/internal/appstore"
 	"github.com/Smana/app-wizard/internal/assist"
@@ -90,59 +89,24 @@ func main() {
 		return gitprovider.NewGitHub(ctx, token, cfg.RepoOwner, cfg.RepoName)
 	}
 
-	// Authenticator is selected by AUTH_MODE (CL-11):
+	// Authenticator is selected by AUTH_MODE:
 	//   dev     — login bypassed, PRs written to the working tree (LocalDryRun).
 	//   github  — GitHub OAuth is both login and PR token (default).
-	//   zitadel — Zitadel OIDC login + authz gate; GitHub is a linked PR token.
-	var authHandler auth.Authenticator
-	switch cfg.AuthMode {
-	case "zitadel":
-		if cfg.ZitadelIssuer == "" || cfg.ZitadelClientID == "" {
-			logger.Error("AUTH_MODE=zitadel requires ZITADEL_ISSUER and ZITADEL_CLIENT_ID")
-			os.Exit(1)
-		}
-		verifier, authEndpoint, tokenEndpoint, err := auth.NewOIDCVerifier(ctx, cfg.ZitadelIssuer, cfg.ZitadelClientID)
-		if err != nil {
-			logger.Error("failed to initialize Zitadel OIDC (discovery)", "err", err)
-			os.Exit(1)
-		}
-		// In zitadel mode OAUTH_REDIRECT_URL / ZITADEL_REDIRECT_URL may share the
-		// primary callback path; the GitHub link uses its own callback path.
-		githubLinkRedirect := deriveGitHubLinkRedirect(cfg.OAuthRedirectURL)
-		authHandler = auth.NewZitadel(auth.ZitadelConfig{
-			AuthEndpoint:       authEndpoint,
-			TokenEndpoint:      tokenEndpoint,
-			ClientID:           cfg.ZitadelClientID,
-			ClientSecret:       cfg.ZitadelClientSecret,
-			RedirectURL:        cfg.ZitadelRedirectURL,
-			Verifier:           verifier,
-			RequiredRole:       cfg.ZitadelRequiredRole,
-			GitHubClientID:     cfg.GitHubClientID,
-			GitHubClientSecret: cfg.GitHubClientSecret,
-			GitHubRedirectURL:  githubLinkRedirect,
-			SessionKey:         cfg.SessionKey,
-			Factory:            factory,
-			Logger:             logger,
-		})
-		logger.Info("auth mode: zitadel (OIDC login + linked GitHub PR token)",
-			"issuer", cfg.ZitadelIssuer, "requiredRole", cfg.ZitadelRequiredRole != "")
-	default: // "github" and "dev"
-		authCfg := auth.Config{
-			ClientID:     cfg.GitHubClientID,
-			ClientSecret: cfg.GitHubClientSecret,
-			RedirectURL:  cfg.OAuthRedirectURL,
-			SessionKey:   cfg.SessionKey,
-			Factory:      factory,
-			Logger:       logger,
-		}
-		if cfg.AuthMode == "dev" {
-			logger.Warn("AUTH_MODE=dev — login bypassed, PRs written to the working tree; DO NOT use in a deployed environment")
-			authCfg.DevProvider = gitprovider.NewLocalDryRun(cfg.RepoRoot)
-		} else {
-			logger.Info("auth mode: github (OAuth login == PR token)")
-		}
-		authHandler = auth.New(authCfg)
+	authCfg := auth.Config{
+		ClientID:     cfg.GitHubClientID,
+		ClientSecret: cfg.GitHubClientSecret,
+		RedirectURL:  cfg.OAuthRedirectURL,
+		SessionKey:   cfg.SessionKey,
+		Factory:      factory,
+		Logger:       logger,
 	}
+	if cfg.AuthMode == "dev" {
+		logger.Warn("AUTH_MODE=dev — login bypassed, PRs written to the working tree; DO NOT use in a deployed environment")
+		authCfg.DevProvider = gitprovider.NewLocalDryRun(cfg.RepoRoot)
+	} else {
+		logger.Info("auth mode: github (OAuth login == PR token)")
+	}
+	authHandler := auth.New(authCfg)
 
 	mux := http.NewServeMux()
 
@@ -166,14 +130,11 @@ func main() {
 	mux.HandleFunc("POST /api/assist/prefill", assistHandlers.Prefill)
 	mux.HandleFunc("POST /api/assist/policies", assistHandlers.Policies)
 
-	// Auth. Same paths per mode; the github-link paths are only functional in
-	// zitadel mode (github/dev return a 404-style message).
+	// Auth (GitHub OAuth; bypassed in dev mode).
 	mux.HandleFunc("GET /api/auth/login", authHandler.Login)
 	mux.HandleFunc("GET /api/auth/callback", authHandler.Callback)
 	mux.HandleFunc("GET /api/me", authHandler.Me)
 	mux.HandleFunc("POST /api/auth/logout", authHandler.Logout)
-	mux.HandleFunc("GET /api/auth/github/link", authHandler.LinkGitHub)
-	mux.HandleFunc("GET /api/auth/github/callback", authHandler.LinkGitHubCallback)
 
 	// App inventory (authenticated, Phase 2).
 	mux.Handle("GET /api/apps", appStore.ListHandler(authHandler.ProviderForRequest, logger))
@@ -196,21 +157,4 @@ func main() {
 		logger.Error("server exited", "err", err)
 		os.Exit(1)
 	}
-}
-
-// deriveGitHubLinkRedirect derives the GitHub-link callback URL from the primary
-// OAuth redirect. In zitadel mode the primary callback path (…/api/auth/callback)
-// belongs to Zitadel, so the GitHub link needs its own path
-// (…/api/auth/github/callback). If the configured URL already points there it is
-// returned unchanged.
-func deriveGitHubLinkRedirect(oauthRedirectURL string) string {
-	const primary = "/api/auth/callback"
-	const link = "/api/auth/github/callback"
-	if strings.HasSuffix(oauthRedirectURL, link) {
-		return oauthRedirectURL
-	}
-	if strings.HasSuffix(oauthRedirectURL, primary) {
-		return strings.TrimSuffix(oauthRedirectURL, primary) + link
-	}
-	return oauthRedirectURL
 }

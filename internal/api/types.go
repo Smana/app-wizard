@@ -196,15 +196,12 @@ type AssistPoliciesResponse struct {
 	Egress  []any `json:"egress"`
 }
 
-// User is the authenticated identity (FR-004). In github/dev mode this is the
-// GitHub user. In zitadel mode (CL-11) it's the Zitadel identity, and
-// GitHubLinked reports whether the user has connected a GitHub token yet (needed
-// to open PRs — Zitadel authenticates the human, GitHub authors the PR).
+// User is the authenticated GitHub identity (FR-004): the login token IS the PR
+// token, so the authenticated user is always the PR author.
 type User struct {
-	Login        string `json:"login"`
-	AvatarURL    string `json:"avatarUrl"`
-	Name         string `json:"name"`
-	GitHubLinked bool   `json:"githubLinked"`
+	Login     string `json:"login"`
+	AvatarURL string `json:"avatarUrl"`
+	Name      string `json:"name"`
 }
 
 // ErrorResponse is the uniform error envelope for all endpoints.

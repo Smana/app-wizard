@@ -62,9 +62,9 @@ docker run --rm -p 8080:8080 \
 
 Non-secret configuration lives in **`wizard.yaml`** (repo coordinates, XRD/stacks
 paths, PR file-layout template, render engine, branding, LLM assists). Secrets
-(`GITHUB_CLIENT_SECRET`, `SESSION_KEY`, `LLM_API_KEY`, `ZITADEL_CLIENT_SECRET`)
-are supplied **via environment only** and are never read from the file.
-Environment variables override file values.
+(`GITHUB_CLIENT_SECRET`, `SESSION_KEY`, `LLM_API_KEY`) are supplied **via
+environment only** and are never read from the file. Environment variables
+override file values.
 
 <!-- T011 (Phase 3): full wizard.yaml key-by-key reference + screenshots. -->
 See [`examples/wizard.yaml`](examples/wizard.yaml) for a complete, commented
@@ -76,9 +76,8 @@ example; a full key reference will live in `docs/configuration.md`.
 
 | Mode | Login | Opens PRs as | Notes |
 |------|-------|--------------|-------|
-| `github` (default) | GitHub OAuth | the GitHub user | single sign-in |
+| `github` (default) | GitHub OAuth | the GitHub user | login token IS the PR token |
 | `dev` | none | — | local development only |
-| `zitadel` | Zitadel OIDC (SSO) | the linked GitHub user | two-flow (SSO + linked GitHub token) |
 
 ## Security model
 
