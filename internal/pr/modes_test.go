@@ -55,7 +55,7 @@ func TestCreateModeSucceedsWhenAbsent(t *testing.T) {
 func TestUpdateModeCommitsOnlyAppYAML(t *testing.T) {
 	s := validService()
 	fp := gitprovider.NewFakeProvider()
-	existing := []byte(`apiVersion: cloud.ogenki.io/v1alpha1
+	existing := []byte(`apiVersion: example.com/v1beta1
 kind: App
 metadata:
   name: myapp

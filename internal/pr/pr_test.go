@@ -18,9 +18,9 @@ func (f fakeValidator) Validate(_ context.Context, _ map[string]any) (api.Valida
 	return f.resp, nil
 }
 
-// testGVK is the claim GVK the fakes resolve — mirrors the ogenki App XRD so
+// testGVK is the claim GVK the fakes resolve — mirrors a real App XRD so
 // existing assertions hold, but it flows through as data (nothing hardcoded).
-var testGVK = api.GVK{APIVersion: "cloud.ogenki.io/v1alpha1", Kind: "App"}
+var testGVK = api.GVK{APIVersion: "example.com/v1beta1", Kind: "App"}
 
 type fakeStacks struct{}
 

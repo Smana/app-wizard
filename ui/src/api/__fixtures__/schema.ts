@@ -8,7 +8,7 @@ import type { SchemaPayload } from "../types";
 // wizard code change).
 export const fixtureSchema: SchemaPayload = {
   schemaVersion: "fixture-v1",
-  gvk: { apiVersion: "cloud.ogenki.io/v1alpha1", kind: "App" },
+  gvk: { apiVersion: "example.com/v1beta1", kind: "App" },
   stacks: [
     {
       name: "dev",

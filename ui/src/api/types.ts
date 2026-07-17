@@ -16,6 +16,13 @@ export interface GVK {
   kind: string;
 }
 
+// Branding is the SPA chrome (title/logo/theme), configured per deployment.
+export interface Branding {
+  title: string;
+  logoUrl: string;
+  theme: Record<string, string>;
+}
+
 export interface CELRule {
   rule: string;
   message: string;

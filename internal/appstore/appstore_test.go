@@ -19,7 +19,7 @@ func (f fakeStacks) Stacks(_ context.Context) ([]api.Stack, error) {
 func TestListInventory(t *testing.T) {
 	fp := gitprovider.NewFakeProvider()
 	// Two apps in team-a with different types.
-	fp.Seed("main", "apps/team-a/web-app/app.yaml", []byte(`apiVersion: cloud.ogenki.io/v1alpha1
+	fp.Seed("main", "apps/team-a/web-app/app.yaml", []byte(`apiVersion: example.com/v1beta1
 kind: App
 metadata:
   name: web-app
@@ -29,7 +29,7 @@ spec:
     repository: ghcr.io/acme/web
     tag: "1.2.3"
 `))
-	fp.Seed("main", "apps/team-a/worker-app/app.yaml", []byte(`apiVersion: cloud.ogenki.io/v1alpha1
+	fp.Seed("main", "apps/team-a/worker-app/app.yaml", []byte(`apiVersion: example.com/v1beta1
 kind: App
 metadata:
   name: worker-app
@@ -93,7 +93,7 @@ func TestListSkipsStackWithoutAppsDir(t *testing.T) {
 
 func TestGetApp(t *testing.T) {
 	fp := gitprovider.NewFakeProvider()
-	raw := []byte(`apiVersion: cloud.ogenki.io/v1alpha1
+	raw := []byte(`apiVersion: example.com/v1beta1
 kind: App
 metadata:
   name: myapp

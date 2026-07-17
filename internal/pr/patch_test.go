@@ -11,7 +11,7 @@ import (
 // scalar (image.tag) must leave comments and unmanaged-looking fields intact and
 // produce a one-line diff.
 func TestPatchClaimYAMLMinimalDiff(t *testing.T) {
-	existing := []byte(`apiVersion: cloud.ogenki.io/v1alpha1
+	existing := []byte(`apiVersion: example.com/v1beta1
 kind: App
 metadata:
   name: myapp
@@ -124,7 +124,7 @@ func TestPatchClaimYAMLAppendsNewKey(t *testing.T) {
 func TestPatchClaimYAMLFallbackNoSpec(t *testing.T) {
 	// A document with no spec mapping falls back to full generation, keeping
 	// metadata name/namespace.
-	existing := []byte(`apiVersion: cloud.ogenki.io/v1alpha1
+	existing := []byte(`apiVersion: example.com/v1beta1
 kind: App
 metadata:
   name: myapp

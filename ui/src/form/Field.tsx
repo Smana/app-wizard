@@ -138,9 +138,8 @@ export function Field({
           {isInternetFacing && boolChecked && (
             <Alert variant="warning">
               <AlertDescription>
-                ⚠ Public exposure — this serves the app on the public internet
-                (…cloud.ogenki.io). Use a private (Tailscale) route unless public
-                access is required.
+                ⚠ Public exposure — this serves the app on the public internet.
+                Use a private route unless public access is required.
               </AlertDescription>
             </Alert>
           )}

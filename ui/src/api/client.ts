@@ -7,6 +7,7 @@ import type {
   AssistPoliciesResponse,
   AssistPrefillResponse,
   AssistStatus,
+  Branding,
   PRRequest,
   PRResponse,
   RenderPreviewRequest,
@@ -83,6 +84,16 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 
 export function getSchema(): Promise<SchemaPayload> {
   return request<SchemaPayload>("/api/schema");
+}
+
+// GET /api/branding — SPA chrome. Never throws: a failure yields neutral
+// defaults so the app renders regardless.
+export function getBranding(): Promise<Branding> {
+  return request<Branding>("/api/branding").catch(() => ({
+    title: "App Wizard",
+    logoUrl: "",
+    theme: {},
+  }));
 }
 
 // GET /api/me — throws UnauthorizedError when the session is missing.

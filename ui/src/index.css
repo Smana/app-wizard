@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 /*
- * Ogenki brand theme (SPEC-008 Phase 1).
- * Palette extracted from blog.ogenki.io:
- *   primary ocean blue   #0077b8   deep navy   #002538 / #003552
- *   green accent         #6ab825   neutral text #575757
- *   surfaces             #f2f2f2 / #fafafa      borders #dedede
- *   warning #ed9d13      danger  #d22323
+ * Default theme — a neutral blue/navy palette. Every value is a CSS custom
+ * property on :root, so a deployment can restyle the wizard without a rebuild
+ * by supplying branding.theme in wizard.yaml (keys map to these var names).
+ *   primary #0077b8   navy #002538 / #003552   accent #6ab825
+ *   neutral text #575757   surfaces #f2f2f2 / #fafafa   borders #dedede
+ *   warning #ed9d13   danger #d22323
  * Light theme is the default; the .dark block maps surfaces to deep navy.
  * Contrast: text tokens meet WCAG AA on their intended backgrounds.
  */

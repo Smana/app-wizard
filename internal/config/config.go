@@ -254,7 +254,7 @@ type fileConfig struct {
 // loadFile reads wizard.yaml. Path from WIZARD_CONFIG, default
 // /config/wizard.yaml. Absent + unset ⇒ zero fileConfig (pure-env path). Absent
 // but WIZARD_CONFIG explicitly set ⇒ error (a mount that didn't land is a bug,
-// not a silent fallback to ogenki defaults on someone else's platform).
+// not a silent fallback to the wrong repo/XRD defaults on someone else's platform).
 func loadFile() (fileConfig, error) {
 	var fc fileConfig
 	path := os.Getenv("WIZARD_CONFIG")

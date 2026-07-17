@@ -36,6 +36,15 @@ type GVK struct {
 	Kind       string `json:"kind"`
 }
 
+// Branding is the SPA chrome (GET /api/branding), all operator-configurable via
+// wizard.yaml. Theme is a map of CSS custom properties (without the leading
+// "--") applied to :root, so a deployment can restyle without a rebuild.
+type Branding struct {
+	Title   string            `json:"title"`
+	LogoURL string            `json:"logoUrl"`
+	Theme   map[string]string `json:"theme"`
+}
+
 // CELRule is one x-kubernetes-validations entry from the XRD.
 type CELRule struct {
 	Rule    string `json:"rule"`

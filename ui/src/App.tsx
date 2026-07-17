@@ -1,7 +1,7 @@
 // App shell: auth gate (GET /api/me) + schema load, then the schema-driven
 // create wizard. When unauthenticated (401), shows the GitHub sign-in button.
 import { useEffect, useState } from "react";
-import type { AppSummary, SchemaPayload, User } from "./api/types";
+import type { AppSummary, Branding, SchemaPayload, User } from "./api/types";
 import * as api from "./api/client";
 import { UnauthorizedError } from "./api/client";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
@@ -20,6 +20,8 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [auth, setAuth] = useState<AuthState>("loading");
   const [error, setError] = useState<string | null>(null);
+  // Neutral default until /api/branding resolves (title from the deployment).
+  const [branding, setBranding] = useState<Branding>({ title: "App Wizard", logoUrl: "", theme: {} });
 
   // Top-level view: create wizard (default) or the day-2 inventory.
   const [view, setView] = useState<View>("create");
@@ -70,6 +72,16 @@ export function App() {
         if (e instanceof UnauthorizedError) setAuth("anonymous");
         else setError(errorMessage(e));
       });
+
+    // Branding: apply the configured title + theme (CSS custom properties on
+    // :root). Neutral defaults when unset, so the OSS app is unbranded.
+    api.getBranding().then((b) => {
+      setBranding(b);
+      if (b.title) document.title = b.title;
+      for (const [k, v] of Object.entries(b.theme ?? {})) {
+        document.documentElement.style.setProperty(`--${k}`, v);
+      }
+    });
   }, []);
 
   return (
@@ -77,14 +89,11 @@ export function App() {
       <header className="bg-brand-navy text-brand-navy-fg">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-3">
-            {/* Dark logo variant (light artwork) on the navy brand header */}
-            <img
-              src="/ogenki-logo-dark.webp"
-              alt="Ogenki"
-              className="h-9 w-auto shrink-0"
-            />
+            {branding.logoUrl && (
+              <img src={branding.logoUrl} alt="" className="h-9 w-auto shrink-0" />
+            )}
             <div>
-              <h1 className="text-lg font-semibold leading-tight">App Wizard</h1>
+              <h1 className="text-lg font-semibold leading-tight">{branding.title}</h1>
               <p className="text-xs text-brand-navy-fg/70">
                 Declare an application and open a GitOps pull request — no YAML by hand.
               </p>

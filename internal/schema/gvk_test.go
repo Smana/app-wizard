@@ -6,7 +6,7 @@ import (
 )
 
 // TestParseGVK derives the claim GVK from assorted XRD shapes — nothing is
-// special-cased to cloud.ogenki.io/App, so a foreign XRD yields its own GVK
+// special-cased to any particular group, so a foreign XRD yields its own GVK
 // (FR-001, SC-002/SC-003).
 func TestParseGVK(t *testing.T) {
 	cases := []struct {
@@ -20,7 +20,7 @@ func TestParseGVK(t *testing.T) {
 			name: "v2 namespaced XR (names.kind, served version)",
 			doc: `
 spec:
-  group: cloud.ogenki.io
+  group: example.com
   scope: Namespaced
   names:
     kind: App
@@ -28,7 +28,7 @@ spec:
     - name: v1alpha1
       served: true
 `,
-			wantAPIVersion: "cloud.ogenki.io/v1alpha1",
+			wantAPIVersion: "example.com/v1alpha1",
 			wantKind:       "App",
 		},
 		{
