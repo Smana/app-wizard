@@ -34,6 +34,7 @@ React SPA ──► Go backend (single binary)
                │  /api/schema          XRD → JSON Schema + CEL + ui-hints + stacks
                │  /api/validate        OpenAPI + CEL + secret scan
                │  /api/render-preview  crossplane render (optional)
+               │  /api/assist/*        LLM prefill + network-policy suggestions (optional)
                │  /api/pr              branch + files + PR as the user
                ▼
       <repo>/<layout>/ ──► your GitOps controller ──► cluster
@@ -42,6 +43,32 @@ React SPA ──► Go backend (single binary)
 The form is generated from the XRD, so a new field on the XRD appears in the
 wizard on the next restart with **no code change**. Claim `apiVersion`/`kind`
 are read from the XRD — nothing is hardcoded to a particular platform.
+
+## AI assists (optional)
+
+Two bounded, opt-in LLM helpers that never bypass validation — everything they
+produce still goes through the same OpenAPI + CEL + secret gates:
+
+- **Describe-to-prefill** — type a sentence ("a Python API on port 8000 with a
+  small postgres, private access") and the form is populated with
+  schema-valid values, each AI-set field badged. Nothing is submitted
+  automatically.
+- **Network-policy suggester** — describe your app's dependencies and get
+  candidate CiliumNetworkPolicy rules (including the mandatory kube-dns L7 rule)
+  rendered into the editor for review.
+
+Assists are **off by default** and the form is fully usable without them (the UI
+hides the affordances when the backend is unconfigured). They speak the
+Anthropic Messages API with forced tool-use for schema-constrained output, so
+they work against the Anthropic API or any Anthropic-compatible endpoint. Enable
+by setting `LLM_API_KEY` (env-only) and, optionally, `assists.baseUrl` /
+`assists.model` in `wizard.yaml`:
+
+```yaml
+assists:
+  model: claude-opus-4-8
+  baseUrl: https://api.anthropic.com   # or any Anthropic-compatible gateway
+```
 
 ## Quickstart
 
