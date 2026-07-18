@@ -106,11 +106,6 @@ func runGenerate(args []string) error {
 		return fmt.Errorf("spec is invalid")
 	}
 
-	// Gate 1b: naming — AWS-backed apps must carry the xplane-* prefix.
-	if ge := pr.NamingGate(*appName, spec); ge != nil {
-		return fmt.Errorf("%s", ge.Message)
-	}
-
 	// Build the claim (GVK derived from the XRD).
 	gvk, err := pipeline.GVK(ctx)
 	if err != nil {
