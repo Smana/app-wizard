@@ -14,9 +14,10 @@ no cluster credentials — its blast radius is one Git repository.
 
 ![The App Wizard create form, with the live generated claim on the right](docs/assets/screenshot-create.png)
 
-*The form above is generated entirely from the bundled example XRD — the fields,
-the defaults, and the `example.com/v1beta1` claim GVK all come from it, nothing
-is hardcoded. Run it yourself with `make dev`.*
+*The form is generated entirely from the bundled example XRD — fields, defaults,
+and the `example.com/v1beta1` claim GVK all come from it, nothing is hardcoded.
+The optional AI assist (top) turns a plain-language sentence into a prefilled,
+still-validated form. Run it yourself with `make dev`.*
 
 ## Why
 
