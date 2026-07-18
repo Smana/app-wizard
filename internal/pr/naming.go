@@ -24,26 +24,39 @@ func backendEnabled(spec map[string]any, key string) bool {
 	return enabled
 }
 
-// provisionsAWSResources reports whether the spec enables a backend whose
-// composition creates AWS/IAM resources named after the claim: an S3 bucket
-// (Bucket + EKS Pod Identity role) or a managed SQL instance (CloudNativePG +
-// S3 backup IAM).
+// awsBackedBackends are the spec backends whose composition creates IAM
+// resources named after the claim (S3 bucket + EKS Pod Identity role;
+// CloudNativePG + S3 backup IAM). Keep in sync with the App composition: adding
+// an AWS-backed backend here is what extends the xplane-* naming guard to it.
+var awsBackedBackends = []string{"s3Bucket", "sqlInstance"}
+
+// provisionsAWSResources reports whether the spec enables any AWS-backed backend
+// (see awsBackedBackends).
 func provisionsAWSResources(spec map[string]any) bool {
-	return backendEnabled(spec, "s3Bucket") || backendEnabled(spec, "sqlInstance")
+	for _, backend := range awsBackedBackends {
+		if backendEnabled(spec, backend) {
+			return true
+		}
+	}
+	return false
 }
 
 // NamingGate enforces the xplane-* prefix for apps that provision AWS/IAM
 // resources. It returns a *GateError to block the PR, or nil when the name is
 // acceptable (no AWS-backed feature enabled, or the prefix is already present).
-// This is the wizard-side counterpart to the constitution's naming rule: the
-// spec-level CEL evaluator binds `self` to the spec only and cannot see
-// metadata.name, so the name/spec correlation is enforced here where both the
-// app name and the spec are in hand.
+//
+// This is the wizard's fast-feedback layer: the wizard's schema pipeline
+// evaluates CEL with `self` bound to the spec only (mirroring Kubernetes'
+// spec-scoped rules), so it cannot correlate metadata.name with the spec — the
+// check lives in Go, where both the app name and the spec are in hand.
+// Platform-wide enforcement (kubectl / Flux paths that bypass the wizard)
+// belongs in a root-level XRD x-kubernetes-validations rule, which CAN read
+// self.metadata.name.
 func NamingGate(name string, spec map[string]any) *GateError {
 	if provisionsAWSResources(spec) && !strings.HasPrefix(name, xplanePrefix) {
 		return &GateError{Message: fmt.Sprintf(
-			"app %q enables an AWS-backed feature (s3Bucket or sqlInstance) whose IAM resources must be named within the %s* boundary; name it %q instead",
-			name, xplanePrefix, xplanePrefix+name)}
+			"app %q enables an AWS-backed feature (%s) whose IAM resources must be named within the %s* boundary; name it %q instead",
+			name, strings.Join(awsBackedBackends, ", "), xplanePrefix, xplanePrefix+name)}
 	}
 	return nil
 }
