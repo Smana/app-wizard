@@ -70,11 +70,6 @@ func (s *Service) Create(ctx context.Context, provider gitprovider.Provider, req
 	if req.Stack == "" {
 		return api.PRResponse{}, &GateError{Message: "stack is required"}
 	}
-	// Naming gate: AWS-backed apps must carry the xplane-* prefix (IAM scoping).
-	// Runs for every mode; delete/empty specs never trigger it.
-	if ge := NamingGate(req.AppName, req.Spec); ge != nil {
-		return api.PRResponse{}, ge
-	}
 
 	stack, ok, err := s.stacks.Stack(ctx, req.Stack)
 	if err != nil {
