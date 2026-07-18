@@ -70,7 +70,10 @@
   --success-foreground: #002538;
 
   --warning: #ed9d13;
-  --warning-foreground: #002538;
+  /* Light amber, not the deep-navy used in light mode: the warning alert renders
+     text-warning-foreground on a faint bg-warning/10 tint, so on the dark navy
+     surface the foreground must be light (was #002538 — invisible dark-on-dark). */
+  --warning-foreground: #f5c97f;
 
   --destructive: #f26363;
   --destructive-foreground: #002538;
