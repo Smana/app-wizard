@@ -165,6 +165,13 @@ func Load() (*Config, error) {
 		cfg.XRDSource = SourceLocal
 	}
 
+	// The layout template MUST contain {app}; without it every app in a stack
+	// resolves to the same path and silently overwrites (fail fast at load,
+	// not at PR time).
+	if !strings.Contains(cfg.Layout, "{app}") {
+		return nil, fmt.Errorf("layout %q must contain the {app} token", cfg.Layout)
+	}
+
 	if cfg.UIHintsPath == "" {
 		// ui-hints.yaml defaults beside the working directory.
 		cfg.UIHintsPath = filepath.Join(defaultRepoRoot(), "ui-hints.yaml")
@@ -203,13 +210,6 @@ func pickBool(key string, fileVal *bool, def bool) bool {
 	}
 	if fileVal != nil {
 		return *fileVal
-	}
-	return def
-}
-
-func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
 	}
 	return def
 }
@@ -293,6 +293,9 @@ var secretKeys = map[string]bool{
 	"secrets":            true,
 }
 
+// keyNormalizer strips '_' and '-' so key comparisons ignore separator style.
+var keyNormalizer = strings.NewReplacer("_", "", "-", "")
+
 // rejectSecrets fails the load if any secret-bearing key appears anywhere in the
 // file, with a clear message pointing at the environment. This is the explicit,
 // friendly guard; strict decoding is the backstop for everything else.
@@ -312,7 +315,7 @@ func rejectSecrets(data []byte, path string) error {
 			return
 		}
 		for k, v := range m {
-			norm := strings.NewReplacer("_", "", "-", "").Replace(strings.ToLower(k))
+			norm := keyNormalizer.Replace(strings.ToLower(k))
 			if secretKeys[norm] {
 				found = k
 				return

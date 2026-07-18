@@ -27,16 +27,32 @@ type xrd struct {
 	} `json:"spec"`
 }
 
+// parseXRD unmarshals the XRD document into the minimal struct the derivers
+// read from. Callers that need both the JSON Schema and the GVK (Pipeline.Build)
+// parse once and hand the struct to convertFromXRD + gvkFromXRD instead of
+// unmarshalling the same bytes twice.
+func parseXRD(doc []byte) (xrd, error) {
+	var x xrd
+	if err := yaml.Unmarshal(doc, &x); err != nil {
+		return xrd{}, fmt.Errorf("parse XRD: %w", err)
+	}
+	return x, nil
+}
+
 // ParseGVK derives the claim's group/version/kind from the XRD (FR-001): the
 // apiVersion is spec.group + the first served version, and the kind is
 // spec.claimNames.kind when the XRD defines a claim (Crossplane v1), else
 // spec.names.kind (v2 namespaced XR). No value is hardcoded, so the wizard
 // tracks whatever XRD it is pointed at.
 func ParseGVK(doc []byte) (api.GVK, error) {
-	var x xrd
-	if err := yaml.Unmarshal(doc, &x); err != nil {
-		return api.GVK{}, fmt.Errorf("parse XRD: %w", err)
+	x, err := parseXRD(doc)
+	if err != nil {
+		return api.GVK{}, err
 	}
+	return gvkFromXRD(x)
+}
+
+func gvkFromXRD(x xrd) (api.GVK, error) {
 	if x.Spec.Group == "" {
 		return api.GVK{}, fmt.Errorf("XRD has no spec.group")
 	}
@@ -72,10 +88,14 @@ func ParseGVK(doc []byte) (api.GVK, error) {
 // Kubernetes vendor extensions (x-kubernetes-*) from the JSON Schema output,
 // and lifts x-kubernetes-validations into []api.CELRule.
 func ConvertXRD(doc []byte) (jsonSchema map[string]any, celRules []api.CELRule, err error) {
-	var x xrd
-	if err := yaml.Unmarshal(doc, &x); err != nil {
-		return nil, nil, fmt.Errorf("parse XRD: %w", err)
+	x, err := parseXRD(doc)
+	if err != nil {
+		return nil, nil, err
 	}
+	return convertFromXRD(x)
+}
+
+func convertFromXRD(x xrd) (jsonSchema map[string]any, celRules []api.CELRule, err error) {
 	if len(x.Spec.Versions) == 0 {
 		return nil, nil, fmt.Errorf("XRD has no versions")
 	}

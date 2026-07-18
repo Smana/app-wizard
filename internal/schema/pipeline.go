@@ -56,12 +56,17 @@ func (p *Pipeline) Build(ctx context.Context) (*api.SchemaPayload, error) {
 	}
 	p.mu.Unlock()
 
-	jsonSchema, celRules, err := ConvertXRD(xrdDoc)
+	// Parse the XRD once, then derive both the JSON Schema and the claim GVK
+	// from the same struct (avoids a second full unmarshal of the same bytes).
+	x, err := parseXRD(xrdDoc)
 	if err != nil {
 		return nil, err
 	}
-
-	gvk, err := ParseGVK(xrdDoc)
+	jsonSchema, celRules, err := convertFromXRD(x)
+	if err != nil {
+		return nil, err
+	}
+	gvk, err := gvkFromXRD(x)
 	if err != nil {
 		return nil, err
 	}
