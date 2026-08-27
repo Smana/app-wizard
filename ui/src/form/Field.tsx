@@ -284,7 +284,7 @@ export function Field({
 
 // Icon-only destructive control. `size="icon"` carries the 40px hit area; the
 // visible glyph is smaller, which is why the accessible name is mandatory.
-function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+export function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <Button
       type="button"
@@ -397,40 +397,69 @@ function MapField({
   const map = (getAt(spec, path) as Record<string, unknown> | undefined) ?? {};
   const specKeys = Object.keys(map);
 
-  const [rows, setRows] = useState<Array<{ id: number; key: string }>>(() =>
-    specKeys.map((key, i) => ({ id: i, key })),
-  );
+  // `detached` holds a row's value while the row has no key. A key-less entry
+  // cannot exist in a JSON object, so with nowhere to park it, backspacing
+  // through a key to fix a typo destroyed whatever was under it.
+  type Row = { id: number; key: string; detached?: unknown };
+  const [rows, setRows] = useState<Row[]>(() => specKeys.map((key, i) => ({ id: i, key })));
   const nextId = useRef(rows.length);
 
-  // Absorb keys that appeared in the spec from outside this widget (an edit-mode
-  // load, or the AI prefill assist). Keyed on the key set, so our own edits —
-  // which go through setRows first — don't re-append.
+  // Reconcile with keys that changed in the spec from OUTSIDE this widget: an
+  // edit-mode load, or the AI prefill assist replacing the whole map. Rows whose
+  // key the spec no longer has are dropped — leaving them mounted let a stale row
+  // re-create an entry the prefill had just removed.
   const specKeySignature = specKeys.join(" ");
   useEffect(() => {
     setRows((rs) => {
-      const known = new Set(rs.map((r) => r.key));
+      const live = new Set(specKeys);
+      const kept = rs.filter((r) => r.key === "" || live.has(r.key));
+      const known = new Set(kept.map((r) => r.key));
       const missing = specKeys.filter((k) => !known.has(k));
-      if (missing.length === 0) return rs;
-      return [...rs, ...missing.map((key) => ({ id: nextId.current++, key }))];
+      if (kept.length === rs.length && missing.length === 0) return rs;
+      return [...kept, ...missing.map((key) => ({ id: nextId.current++, key }))];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specKeySignature]);
 
   const emptyValue = () => (objectValued ? {} : "");
 
+  // Rewrite the map in ONE setAt, preserving insertion order. Delete-then-set
+  // moved a renamed key to the end of the object on every keystroke, reshuffling
+  // the live YAML pane and re-firing the reconcile effect per character.
+  const writeMap = (next: Record<string, unknown>) =>
+    onChange(setAt(spec, path, Object.keys(next).length ? next : undefined));
+
   const renameKey = (id: number, from: string, to: string) => {
-    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, key: to } : r)));
-    // Move the value across so renaming a key never drops what was typed under it.
-    let next = spec;
-    const held = from ? getAt(spec, [...path, from]) : undefined;
-    if (from) next = deleteAt(next, [...path, from]);
-    if (to) next = setAt(next, [...path, to], held ?? emptyValue());
-    onChange(next);
+    // Refuse a key another row already holds. Accepting it overwrote that row's
+    // value and left two rows aliasing one entry, so removing either wiped both.
+    if (to !== "" && rows.some((r) => r.id !== id && r.key === to)) {
+      setRows((rs) => rs.map((r) => (r.id === id ? { ...r, key: to } : r)));
+      return;
+    }
+
+    const held = from ? map[from] : rows.find((r) => r.id === id)?.detached;
+    setRows((rs) =>
+      rs.map((r) => (r.id === id ? { ...r, key: to, detached: to === "" ? held : undefined } : r)),
+    );
+
+    const next: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(map)) {
+      if (k === from) {
+        if (to !== "") next[to] = held ?? emptyValue(); // re-inserted in place
+        continue;
+      }
+      next[k] = v;
+    }
+    if (to !== "" && !(from && from in map)) next[to] = held ?? emptyValue();
+    writeMap(next);
   };
 
   const removeRow = (id: number, key: string) => {
     setRows((rs) => rs.filter((r) => r.id !== id));
-    if (key) onChange(deleteAt(spec, [...path, key]));
+    if (!key) return;
+    const next = { ...map };
+    delete next[key];
+    writeMap(next);
   };
 
   return (
@@ -454,7 +483,7 @@ function MapField({
                 <Input
                   aria-label="Value"
                   placeholder="value"
-                  value={key ? String(getAt(spec, [...path, key]) ?? "") : ""}
+                  value={key ? String(map[key] ?? "") : ""}
                   disabled={!key}
                   onChange={(e) =>
                     onChange(setAt(spec, [...path, key], e.target.value || undefined))
