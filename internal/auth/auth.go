@@ -25,8 +25,11 @@ const (
 )
 
 // ProviderFactory builds a gitprovider.Provider from a user token. Injected so
-// tests and main can supply GitHub or a fake.
-type ProviderFactory func(ctx context.Context, token string) gitprovider.Provider
+// tests and main can supply GitHub or a fake. It returns an error because
+// constructing the GitHub client can fail (go-github's NewClient is fallible
+// since v89) — a construction failure must surface as a 5xx, not a nil Provider
+// that panics on first use.
+type ProviderFactory func(ctx context.Context, token string) (gitprovider.Provider, error)
 
 // Auth holds OAuth configuration and the session store.
 type Auth struct {
@@ -147,7 +150,11 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
-	provider := a.factory(r.Context(), token)
+	provider, err := a.factory(r.Context(), token)
+	if err != nil {
+		a.writeError(w, http.StatusInternalServerError, "failed to build git provider")
+		return
+	}
 	u, err := provider.CurrentUser(r.Context())
 	if err != nil {
 		a.writeError(w, http.StatusBadGateway, "failed to fetch user")
@@ -188,7 +195,7 @@ func (a *Auth) ProviderForRequest(r *http.Request) (gitprovider.Provider, error)
 	if !ok {
 		return nil, ErrUnauthenticated
 	}
-	return a.factory(r.Context(), token), nil
+	return a.factory(r.Context(), token)
 }
 
 // ErrUnauthenticated is returned when no user token is in the session.

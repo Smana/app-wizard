@@ -87,7 +87,7 @@ func main() {
 	assistHandlers := assist.NewHandlers(assistBackend, pipeline, validator, logger)
 
 	// Provider factory: build a GitHub gitprovider from a user token.
-	factory := func(ctx context.Context, token string) gitprovider.Provider {
+	factory := func(ctx context.Context, token string) (gitprovider.Provider, error) {
 		return gitprovider.NewGitHub(ctx, token, cfg.RepoOwner, cfg.RepoName)
 	}
 
