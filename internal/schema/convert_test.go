@@ -7,8 +7,10 @@ import (
 	"testing"
 )
 
-// repoRoot walks up from the test file until it finds the app-definition XRD,
-// so schema tests run offline against the checked-in XRD.
+// repoRoot walks up from the test file until it finds the bundled example XRD,
+// so schema tests run offline against a checked-in fixture. examples/xrd.yaml is
+// deliberately both the demo schema and the test fixture: a converter feature
+// that stops being exercised here is a feature `make dev` stopped demonstrating.
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	if r := os.Getenv("REPO_ROOT"); r != "" {
@@ -19,8 +21,7 @@ func repoRoot(t *testing.T) string {
 		t.Fatalf("getwd: %v", err)
 	}
 	for i := 0; i < 10; i++ {
-		candidate := filepath.Join(dir, "infrastructure", "base", "crossplane", "configuration", "app-definition.yaml")
-		if _, err := os.Stat(candidate); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(xrdPath))); err == nil {
 			return dir
 		}
 		parent := filepath.Dir(dir)
@@ -29,11 +30,15 @@ func repoRoot(t *testing.T) string {
 		}
 		dir = parent
 	}
-	t.Skip("repo root with app-definition.yaml not found; set REPO_ROOT to run this test")
+	t.Fatalf("repo root containing %s not found (cwd walk exhausted)", xrdPath)
 	return ""
 }
 
-const xrdPath = "infrastructure/base/crossplane/configuration/app-definition.yaml"
+const (
+	xrdPath     = "examples/xrd.yaml"
+	uiHintsPath = "examples/ui-hints.yaml"
+	stacksPath  = "examples/stacks.yaml"
+)
 
 func loadXRD(t *testing.T) []byte {
 	t.Helper()
@@ -145,7 +150,7 @@ func TestConvertXRDErrors(t *testing.T) {
 func TestPipelineBuildAndCache(t *testing.T) {
 	root := repoRoot(t)
 	src := NewLocalSource(root)
-	p := NewPipeline(src, xrdPath, "apps/stacks.yaml", filepath.Join(root, "container-images/app-wizard/ui-hints.yaml"), true)
+	p := NewPipeline(src, xrdPath, stacksPath, filepath.Join(root, filepath.FromSlash(uiHintsPath)), true)
 
 	payload, err := p.Build(context.Background())
 	if err != nil {
