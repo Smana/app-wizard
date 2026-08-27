@@ -67,11 +67,13 @@ describe("MapField", () => {
     });
   });
 
-  it("removes a row from the spec", () => {
+  it("removes a row, and drops the whole map once it is empty", () => {
     render(<Harness schema={stringValued} initial={{ configs: { gone: "x" } }} />);
     fireEvent.click(screen.getByLabelText("Remove gone"));
 
-    expect(JSON.parse(screen.getByTestId("spec").textContent!)).toEqual({ configs: {} });
+    // Not `{configs: {}}` — an empty map is pruned out of the claim entirely,
+    // so removing the last entry leaves no trace in the generated YAML.
+    expect(JSON.parse(screen.getByTestId("spec").textContent!)).toEqual({});
   });
 
   it("renders the object sub-fields for an object-valued map, not a text input", () => {
@@ -98,5 +100,60 @@ describe("MapField", () => {
     expect(JSON.parse(screen.getByTestId("spec").textContent!)).toEqual({
       configs: { "nginx.conf": { path: "/etc/nginx.conf" } },
     });
+  });
+});
+
+// Regressions found by /code-review on the first version of MapField.
+describe("MapField key handling", () => {
+  it("keeps the value when the key is cleared and retyped", () => {
+    render(<Harness schema={stringValued} initial={{ configs: { tier: "gold" } }} />);
+    const key = screen.getByLabelText("Key");
+    fireEvent.change(key, { target: { value: "" } });
+    fireEvent.change(key, { target: { value: "tier" } });
+
+    expect(JSON.parse(screen.getByTestId("spec").textContent!)).toEqual({
+      configs: { tier: "gold" },
+    });
+  });
+
+  it("refuses a key another row already holds instead of clobbering it", () => {
+    render(<Harness schema={stringValued} initial={{ configs: { tier: "gold" } }} />);
+    fireEvent.click(screen.getByText("+ Add entry"));
+    const keys = screen.getAllByLabelText("Key");
+    fireEvent.change(keys[1], { target: { value: "tier" } });
+
+    // The existing entry keeps its value; the duplicate row writes nothing.
+    expect(JSON.parse(screen.getByTestId("spec").textContent!)).toEqual({
+      configs: { tier: "gold" },
+    });
+  });
+
+  it("preserves key order when renaming, so the YAML pane does not reshuffle", () => {
+    render(<Harness schema={stringValued} initial={{ configs: { a: "1", b: "2", c: "3" } }} />);
+    const keys = screen.getAllByLabelText("Key");
+    fireEvent.change(keys[1], { target: { value: "bee" } });
+
+    const spec = JSON.parse(screen.getByTestId("spec").textContent!);
+    expect(Object.keys(spec.configs)).toEqual(["a", "bee", "c"]);
+  });
+
+  it("drops rows for keys an external spec replacement removed", () => {
+    function Outer() {
+      const [spec, setSpec] = useState<unknown>({ configs: { old: "x" } });
+      return (
+        <>
+          <button onClick={() => setSpec({ configs: { fresh: "y" } })}>prefill</button>
+          <Field schema={stringValued} path={["configs"]} spec={spec} onChange={setSpec}
+                 errors={[]} label="Configs" />
+          <pre data-testid="spec">{JSON.stringify(spec)}</pre>
+        </>
+      );
+    }
+    render(<Outer />);
+    fireEvent.click(screen.getByText("prefill"));
+
+    // One row, for the new key — a stale "old" row could re-create the entry.
+    const keys = screen.getAllByLabelText("Key") as HTMLInputElement[];
+    expect(keys.map((k) => k.value)).toEqual(["fresh"]);
   });
 });
