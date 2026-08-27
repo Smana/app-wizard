@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.27'
           cache: true
       - name: go vet
         run: go vet ./...
@@ -47,12 +47,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.27'
           cache: true
       # .golangci.yml has been in the repo since the split but nothing ran it.
+      # Pinned rather than `latest`: the linter must be built with a Go at least
+      # as new as the toolchain above, or it panics parsing the source
+      # ("file requires newer Go version"). v2.13.1 is built with go1.27.0.
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: v2.12.2
+          version: v2.13.1
 
   ui:
     name: UI build & test
