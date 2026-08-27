@@ -106,7 +106,7 @@ export function App() {
             {user && (
               <div className="flex items-center gap-2 text-sm">
                 {user.avatarUrl && (
-                  <img src={user.avatarUrl} alt="" className="h-7 w-7 rounded-full" />
+                  <img src={user.avatarUrl} alt="" className="img-outline h-7 w-7 rounded-full" />
                 )}
                 <span>{user.name || user.login}</span>
               </div>
@@ -148,15 +148,13 @@ export function App() {
               rounded-lg (8px) outside p-0.5 (2px) around rounded-md (6px)
               children — the track's radius accounts for its own padding, so the
               selected segment's corners run parallel to the track's. */}
-          <div
-            role="tablist"
-            aria-label="View"
-            className="inline-flex gap-0.5 rounded-lg border border-border p-0.5"
-          >
+          {/* Not role="tablist": that contract requires a role="tabpanel" and
+              aria-controls wiring plus arrow-key navigation, none of which exist
+              here. Two buttons that swap a view, with the active one marked. */}
+          <div role="group" aria-label="View" className="inline-flex gap-0.5 rounded-lg border border-border p-0.5">
             <Button
               type="button"
-              role="tab"
-              aria-selected={view === "create" && !editing}
+              aria-pressed={view === "create" && !editing}
               size="sm"
               variant={view === "create" && !editing ? "default" : "ghost"}
               onClick={openCreate}
@@ -165,8 +163,7 @@ export function App() {
             </Button>
             <Button
               type="button"
-              role="tab"
-              aria-selected={view === "list" || !!editing}
+              aria-pressed={view === "list" || !!editing}
               size="sm"
               variant={view === "list" || editing ? "default" : "ghost"}
               onClick={openList}
@@ -175,11 +172,12 @@ export function App() {
             </Button>
           </div>
 
-          {loadingApp && (
-            <p role="status" className="text-sm text-muted-foreground">
-              Loading app…
-            </p>
-          )}
+          {/* The live region is always mounted; only its CONTENT is conditional.
+              Mounting the element together with its text means assistive tech
+              never sees a change to announce. */}
+          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+            {loadingApp ? "Loading app…" : ""}
+          </p>
 
           {editing ? (
             <WizardForm
@@ -197,11 +195,9 @@ export function App() {
         </div>
       )}
 
-      {auth === "authed" && !schema && !error && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading schema…
-        </p>
-      )}
+      <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+        {auth === "authed" && !schema && !error ? "Loading schema…" : ""}
+      </p>
       </main>
     </div>
   );

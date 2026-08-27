@@ -1,7 +1,7 @@
 // The whole product: a schema-driven create form with basic tier (≤8 inputs),
 // expandable advanced/expert groups, live validation, a live YAML pane, render
 // preview and PR submission.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   PRResponse,
   RenderPreviewResponse,
@@ -25,6 +25,7 @@ import { SecretsEditor } from "./SecretsEditor";
 import {
   buildLayout,
   clearInvalidForType,
+  flattenLayout,
   fieldVisibleForType,
   getAt,
   setAt,
@@ -240,11 +241,18 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
     }
   }
 
+  // Cleared on unmount, same as YamlBlock: switching view remounts this form via
+  // its `key`, so a click-then-switch inside 1.5s left the timer firing at a
+  // component that is gone.
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+
   async function copyYaml() {
     try {
       await navigator.clipboard.writeText(yamlText);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 1500);
     } catch {
       /* clipboard unavailable */
     }
@@ -269,25 +277,15 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
     );
   };
 
+  // One flattened view of the layout. Spelling the spread out twice meant the
+  // rule for which buckets count as "all fields" was stated in two places, and
+  // a future Layout field would have to be remembered in both.
+  const allFields = useMemo(() => flattenLayout(layout), [layout]);
+
   // The XRD's own schema for externalSecrets — SecretsEditor takes its wording
   // from it rather than naming a cloud provider.
-  const externalSecretsSchema = useMemo(
-    () =>
-      [...layout.basic, ...layout.groups.flatMap((g) => g.fields), ...layout.ungrouped].find(
-        (f) => f.key === "externalSecrets",
-      )?.schema,
-    [layout],
-  );
-
-  const hasSecretFields = useMemo(
-    () =>
-      [
-        ...layout.basic,
-        ...layout.groups.flatMap((g) => g.fields),
-        ...layout.ungrouped,
-      ].some((f) => SECRET_KEYS.has(f.key)),
-    [layout],
-  );
+  const externalSecretsSchema = allFields.find((f) => f.key === "externalSecrets")?.schema;
+  const hasSecretFields = allFields.some((f) => SECRET_KEYS.has(f.key));
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">

@@ -68,7 +68,7 @@ func NewAnthropicAssist(cfg *config.Config) *AnthropicAssist {
 	}
 	client := anthropic.NewClient(opts...)
 
-	model := anthropic.Model("claude-opus-5")
+	model := anthropic.Model(config.DefaultLLMModel)
 	if cfg.LLMModel != "" {
 		model = anthropic.Model(cfg.LLMModel)
 	}

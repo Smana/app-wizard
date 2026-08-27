@@ -148,11 +148,12 @@ export function YamlBlock({
             type="button"
             onClick={copy}
             aria-label={copied ? "Copied" : "Copy YAML"}
-            // The label is 10px type, but the control gets a real 40px-tall hit
-            // area via the ::after overlay — without changing the chrome's height.
+            // Real padding, not an oversized ::after overlay. The overlay was
+            // taller than the terminal chrome that contains it, so it painted
+            // over the top of the <pre> below and swallowed drag-selection of
+            // the first YAML line.
             className={cn(
-              "relative ml-auto rounded px-1.5 py-0.5 font-mono text-[10px] text-[#8b949e]",
-              "after:absolute after:inset-x-0 after:top-1/2 after:h-10 after:-translate-y-1/2 after:content-['']",
+              "relative ml-auto rounded px-2 py-1.5 font-mono text-[10px] text-[#8b949e]",
               "transition-colors duration-150 ease-out hover:bg-white/10 hover:text-[#c9d1d9]",
               "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#8b949e]",
             )}

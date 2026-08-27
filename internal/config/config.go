@@ -19,6 +19,10 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
+// DefaultLLMModel is the assist model used when none is configured. Referenced
+// by the assist backend too, so the default cannot drift between the two.
+const DefaultLLMModel = "claude-opus-5"
+
 // XRDSourceMode selects where the schema pipeline reads repo files from.
 type XRDSourceMode string
 
@@ -157,7 +161,7 @@ func Load() (*Config, error) {
 		EnvConfigPath:       pick("ENVCONFIG_PATH", fc.Render.EnvConfigPath, ""),
 		LLMAPIKey:           os.Getenv("LLM_API_KEY"),
 		LLMBaseURL:          pick("LLM_BASE_URL", fc.Assists.BaseURL, ""),
-		LLMModel:            pick("LLM_MODEL", fc.Assists.Model, "claude-opus-5"),
+		LLMModel:            pick("LLM_MODEL", fc.Assists.Model, DefaultLLMModel),
 		FunctionsDevTargets: parseKVList(pick("FUNCTIONS_DEV_TARGETS", fc.Render.FunctionsDevTargets, "")),
 		Layout:              pick("LAYOUT", fc.Layout, "apps/{stack}/{app}"),
 		RenderEnabled:       pickBool("RENDER_ENABLED", fc.Render.Enabled, true),
