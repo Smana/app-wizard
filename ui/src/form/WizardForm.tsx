@@ -29,6 +29,7 @@ import {
   getAt,
   setAt,
   tierBadgeVariant,
+  typeGatesFromCEL,
   type TopField,
 } from "./model";
 import { claimToYaml } from "./claim";
@@ -115,6 +116,10 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
   // CEL rules). Default "web" when unset.
   const workloadType = (getAt(spec, ["type"]) as string | undefined) ?? "web";
 
+  // Which top-level fields the workload type gates, read off the XRD's own CEL
+  // rules rather than a hand-maintained table (see model.ts).
+  const typeGates = useMemo(() => typeGatesFromCEL(schema.celRules ?? []), [schema.celRules]);
+
   // Visibility filter by workload type (fieldVisibleForType is the shared
   // predicate in model.ts, mirroring the App XRD CEL rules). Applied to a set of
   // { group, fields } blocks, dropping any group that becomes empty (so e.g.
@@ -128,7 +133,7 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
       groups
         .map(({ group, fields }) => ({
           group,
-          fields: fields.filter((f) => fieldVisibleForType(f.key, workloadType)),
+          fields: fields.filter((f) => fieldVisibleForType(f.key, workloadType, typeGates)),
         }))
         .filter(({ fields }) => fields.length > 0);
 
@@ -136,17 +141,17 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
       visibleBasicGroups: filterGroups(layout.basicGroups),
       visibleGroups: filterGroups(layout.groups),
       visibleUngrouped: layout.ungrouped.filter((f) =>
-        fieldVisibleForType(f.key, workloadType),
+        fieldVisibleForType(f.key, workloadType, typeGates),
       ),
     };
-  }, [layout, workloadType]);
+  }, [layout, workloadType, typeGates]);
 
   // Clear now-invalid values when the type changes so a hidden field can't leave a
   // stale value that trips CEL validation and blocks the PR. clearInvalidForType
   // returns the SAME reference when nothing changes, so this never loops.
   useEffect(() => {
-    setSpec((s: unknown) => clearInvalidForType(s, workloadType));
-  }, [workloadType]);
+    setSpec((s: unknown) => clearInvalidForType(s, workloadType, typeGates));
+  }, [workloadType, typeGates]);
 
   // The generated claim — exactly what gets committed. This is the minimal claim
   // (only values you set); the full effective resources (with composition
@@ -263,6 +268,16 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
       />
     );
   };
+
+  // The XRD's own schema for externalSecrets — SecretsEditor takes its wording
+  // from it rather than naming a cloud provider.
+  const externalSecretsSchema = useMemo(
+    () =>
+      [...layout.basic, ...layout.groups.flatMap((g) => g.fields), ...layout.ungrouped].find(
+        (f) => f.key === "externalSecrets",
+      )?.schema,
+    [layout],
+  );
 
   const hasSecretFields = useMemo(
     () =>
@@ -416,6 +431,7 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
                 onChange={setSpec}
                 envPath={["env"]}
                 secretsPath={["externalSecrets"]}
+                secretsSchema={externalSecretsSchema}
               />
             )}
             {fields.map((f) => renderField(f, false))}
@@ -441,6 +457,7 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
                 onChange={setSpec}
                 envPath={["env"]}
                 secretsPath={["externalSecrets"]}
+                secretsSchema={externalSecretsSchema}
               />
             </Collapsible>
           )}
@@ -545,10 +562,14 @@ function ValidationSummary({
     validation.secretFindings.length === 0;
   if (clean) {
     if (validating) {
-      return <p className="text-xs text-muted-foreground">Validating…</p>;
+      return (
+        <p role="status" className="text-xs text-muted-foreground">
+          Validating…
+        </p>
+      );
     }
     return (
-      <div className="flex items-center gap-2 text-xs">
+      <div role="status" className="flex items-center gap-2 text-xs">
         <Badge variant="success">Valid</Badge>
         <span className="text-muted-foreground">No validation issues.</span>
       </div>
@@ -579,8 +600,8 @@ function ValidationSummary({
                 </li>
               ))}
             </ul>
-            Move secret values to AWS Secrets Manager and reference them via the ExternalSecret
-            flow.
+            Move secret values into your platform's secret store and reference them via the
+            ExternalSecret flow.
           </AlertDescription>
         </Alert>
       )}
@@ -617,7 +638,7 @@ function PreviewCard({ preview }: { preview: RenderPreviewResponse }) {
             </p>
             <div className="flex items-center gap-2 text-xs">
               <Badge variant="success">Rendered</Badge>
-              <span className="text-muted-foreground">
+              <span className="tabular-nums text-muted-foreground">
                 {preview.resources.length} resource
                 {preview.resources.length === 1 ? "" : "s"} generated.
               </span>
