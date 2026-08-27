@@ -134,3 +134,37 @@ describe("workload-type gates derived from CEL", () => {
     expect(clearInvalidForType(spec, "worker", gates)).toBe(spec);
   });
 });
+
+describe("enabled-guarded gates (regression)", () => {
+  const gates = typeGatesFromCEL(APP_XRD_RULES);
+
+  it("keeps a DISABLED gated block on a workload type that forbids it", () => {
+    // "route is only valid when type is 'web'" is really "an ENABLED route is".
+    // A committed `route: {enabled:false}` on a worker is legal CEL, so loading
+    // that app for edit must not strip it — doing so made the update PR delete
+    // the block from Git.
+    const spec = {
+      route: { enabled: false, hostname: "keepme" },
+      autoscaling: { enabled: false, minReplicas: 3 },
+    };
+    expect(clearInvalidForType(spec, "worker", gates)).toBe(spec);
+    expect(clearInvalidForType(spec, "cron", gates)).toBe(spec);
+  });
+
+  it("still clears an ENABLED block that the type forbids", () => {
+    const spec = { route: { enabled: true, hostname: "api.example.com" } };
+    expect(clearInvalidForType(spec, "worker", gates)).toEqual({});
+  });
+
+  it("records the enabled guard only for rules that carry one", () => {
+    expect(gates.get("route")?.enabledGuarded).toBe(true);
+    expect(gates.get("autoscaling")?.enabledGuarded).toBe(true);
+    // schedule's rule has no `!self.schedule.enabled` clause — it is unconditional.
+    expect(gates.get("schedule")?.enabledGuarded).toBe(false);
+  });
+
+  it("clears an unconditionally-gated field regardless of any enabled flag", () => {
+    const spec = { schedule: "0 3 * * *" };
+    expect(clearInvalidForType(spec, "web", gates)).toEqual({});
+  });
+});

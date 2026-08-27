@@ -115,6 +115,13 @@ function groupFields(
 
 export const fallbackGroup = FALLBACK_GROUP;
 
+// Every field the layout renders, in one list. `basic` already contains what
+// `basicGroups` re-buckets, so including both would double-count — that is the
+// non-obvious part, and it is stated once, here.
+export function flattenLayout(layout: Layout): TopField[] {
+  return [...layout.basic, ...layout.groups.flatMap((g) => g.fields), ...layout.ungrouped];
+}
+
 // --- Immutable nested get/set by path segments -----------------------------
 
 export type PathSeg = string | number;
@@ -218,6 +225,13 @@ export function prune(value: unknown): unknown {
 export interface TypeGate {
   allow: Set<string>;
   deny: Set<string>;
+  // True when the rule only bites while the field is ENABLED — i.e. it carries a
+  // `!self.<key>.enabled` escape clause. `route is only valid when type is 'web'`
+  // is really "an ENABLED route is only valid for web"; a committed
+  // `route: {enabled: false}` on a worker is perfectly legal CEL. Without this,
+  // clearInvalidForType deleted such a block on load and the update PR removed it
+  // from Git — the exact silent-input-destruction the hand-written table did.
+  enabledGuarded: boolean;
 }
 
 const GUARDED_KEY = /!has\(self\.([A-Za-z0-9_]+)\)/;
@@ -235,9 +249,14 @@ export function typeGatesFromCEL(rules: CELRule[]): Map<string, TypeGate> {
     const key = GUARDED_KEY.exec(rule)?.[1];
     if (!key || key === "type") continue;
 
-    const gate = gates.get(key) ?? { allow: new Set<string>(), deny: new Set<string>() };
+    const gate = gates.get(key) ?? {
+      allow: new Set<string>(),
+      deny: new Set<string>(),
+      enabledGuarded: false,
+    };
     for (const m of rule.matchAll(TYPE_EQ)) gate.allow.add(m[1]);
     for (const m of rule.matchAll(TYPE_NE)) gate.deny.add(m[1]);
+    if (rule.includes(`!self.${key}.enabled`)) gate.enabledGuarded = true;
     if (gate.allow.size > 0 || gate.deny.size > 0) gates.set(key, gate);
   }
   return gates;
@@ -270,9 +289,15 @@ export function clearInvalidForType(
   type: string,
   gates: Map<string, TypeGate>,
 ): unknown {
-  const present = [...gates.keys()].filter(
-    (k) => !fieldVisibleForType(k, type, gates) && getAt(spec, [k]) !== undefined,
-  );
+  const present = [...gates.keys()].filter((k) => {
+    if (fieldVisibleForType(k, type, gates)) return false;
+    if (getAt(spec, [k]) === undefined) return false;
+    // An enabled-guarded field is only invalid while it is actually enabled.
+    // Leaving a disabled block alone is what stops an edit-mode load from
+    // silently deleting `route: {enabled: false}` out of an existing worker app.
+    if (gates.get(k)?.enabledGuarded && getAt(spec, [k, "enabled"]) !== true) return false;
+    return true;
+  });
   if (present.length === 0) return spec; // no-op: preserve reference (no render loop)
 
   let next = spec;
