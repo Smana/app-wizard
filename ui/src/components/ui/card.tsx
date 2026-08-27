@@ -3,7 +3,13 @@ import { cn } from "@/lib/utils";
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-lg border border-border bg-card text-foreground shadow-sm", className)}
+      className={cn(
+        // rounded-xl (12px) over p-4 children at rounded-md (6px): the outer
+        // radius accounts for the padding, so nested corners stay parallel.
+        // Depth comes from the layered shadow ring, not a solid border.
+        "rounded-xl bg-card text-foreground shadow-border",
+        className,
+      )}
       {...props}
     />
   );
