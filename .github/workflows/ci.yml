@@ -26,17 +26,20 @@ jobs:
       # -race because the schema pipeline caches under a mutex and the HTTP
       # handlers read it concurrently; a data race there is a production bug the
       # unit tests would otherwise pass straight over.
+      #
+      # The skip check rides on the SAME invocation. Running the suite a second
+      # time to count skips both doubled CI time and asserted about a different
+      # run than the one that passed (-race vs not). `grep -E "^\s*--- SKIP"`
+      # rather than an anchored match, because subtest skips are indented and an
+      # anchored pattern misses exactly the table-driven ones a drift guard emits.
       - name: go test
-        run: go test -race ./...
-      # The schema tests are the drift guard between the form and the XRD. They
-      # skip themselves when their fixture is missing, and a silent skip reads
-      # exactly like a pass — assert they actually ran.
-      - name: no silently-skipped tests
         run: |
-          skipped=$(go test ./... -v 2>&1 | grep -c '^--- SKIP' || true)
-          if [ "$skipped" -ne 0 ]; then
-            echo "::error::$skipped test(s) skipped; the schema drift guard is only real if it runs"
-            go test ./... -v 2>&1 | grep -A2 '^--- SKIP'
+          set -o pipefail
+          out=$(go test -race -v ./... 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          if echo "$out" | grep -qE "^\s*--- SKIP"; then
+            echo "::error::a test skipped itself; the schema drift guard is only real if it runs"
+            echo "$out" | grep -E -A2 "^\s*--- SKIP"
             exit 1
           fi
 
@@ -71,6 +74,7 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - run: npm ci
-      - run: npm run lint
       - run: npm test
+      # `npm run build` is `tsc -b && vite build`, so it type-checks already —
+      # there is no separate lint step to run (the repo has no ESLint).
       - run: npm run build
