@@ -15,8 +15,8 @@ func newTestAuth(dev gitprovider.Provider) *Auth {
 		ClientID:    "gh-client",
 		RedirectURL: "http://localhost:8080/api/auth/callback",
 		SessionKey:  []byte("0123456789abcdef0123456789abcdef"), // pragma: allowlist secret
-		Factory: func(ctx context.Context, token string) gitprovider.Provider {
-			return &gitprovider.FakeProvider{User: gitprovider.User{Login: "gh-user"}}
+		Factory: func(ctx context.Context, token string) (gitprovider.Provider, error) {
+			return &gitprovider.FakeProvider{User: gitprovider.User{Login: "gh-user"}}, nil
 		},
 		DevProvider: dev,
 	})

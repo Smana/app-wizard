@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-github/v66/github"
-	"golang.org/x/oauth2"
+	"github.com/google/go-github/v89/github"
 )
 
 // GitHub is a Provider backed by the GitHub REST API, acting as the user whose
@@ -18,14 +17,21 @@ type GitHub struct {
 }
 
 // NewGitHub builds a GitHub provider for owner/repo using the user's token.
-func NewGitHub(ctx context.Context, token, owner, repo string) *GitHub {
-	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-	tc := oauth2.NewClient(ctx, ts)
+//
+// The context parameter is unused: go-github's WithAuthToken attaches the token
+// to the client's transport directly, which replaced the oauth2.StaticTokenSource
+// round-tripper this used to build. It is kept so the signature still matches
+// auth.ProviderFactory.
+func NewGitHub(_ context.Context, token, owner, repo string) (*GitHub, error) {
+	client, err := github.NewClient(github.WithAuthToken(token))
+	if err != nil {
+		return nil, fmt.Errorf("build github client: %w", err)
+	}
 	return &GitHub{
-		client: github.NewClient(tc),
+		client: client,
 		owner:  owner,
 		repo:   repo,
-	}
+	}, nil
 }
 
 func (g *GitHub) ReadFile(ctx context.Context, ref, path string) ([]byte, string, error) {
@@ -70,11 +76,12 @@ func (g *GitHub) CreateBranch(ctx context.Context, baseBranch, branch string) er
 	if err != nil {
 		return fmt.Errorf("get base ref %q: %w", baseBranch, err)
 	}
-	newRef := &github.Reference{
-		Ref:    github.String("refs/heads/" + branch),
-		Object: &github.GitObject{SHA: baseRef.Object.SHA},
-	}
-	_, _, err = g.client.Git.CreateRef(ctx, g.owner, g.repo, newRef)
+	// v89 takes a dedicated request struct of plain strings rather than a
+	// *Reference assembled from pointers.
+	_, _, err = g.client.Git.CreateRef(ctx, g.owner, g.repo, github.CreateRef{
+		Ref: "refs/heads/" + branch,
+		SHA: baseRef.Object.GetSHA(),
+	})
 	return err
 }
 
@@ -94,18 +101,18 @@ func (g *GitHub) CommitFiles(ctx context.Context, branch string, files []File, m
 			// A tree entry with a nil SHA (and no content) removes the path from
 			// the base tree when committed.
 			entries = append(entries, &github.TreeEntry{
-				Path: github.String(f.Path),
-				Mode: github.String("100644"),
-				Type: github.String("blob"),
+				Path: github.Ptr(f.Path),
+				Mode: github.Ptr("100644"),
+				Type: github.Ptr("blob"),
 				SHA:  nil,
 			})
 			continue
 		}
 		entries = append(entries, &github.TreeEntry{
-			Path:    github.String(f.Path),
-			Mode:    github.String("100644"),
-			Type:    github.String("blob"),
-			Content: github.String(string(f.Content)),
+			Path:    github.Ptr(f.Path),
+			Mode:    github.Ptr("100644"),
+			Type:    github.Ptr("blob"),
+			Content: github.Ptr(string(f.Content)),
 		})
 	}
 	tree, _, err := g.client.Git.CreateTree(ctx, g.owner, g.repo, baseCommit.Tree.GetSHA(), entries)
@@ -113,8 +120,8 @@ func (g *GitHub) CommitFiles(ctx context.Context, branch string, files []File, m
 		return fmt.Errorf("create tree: %w", err)
 	}
 
-	commit := &github.Commit{
-		Message: github.String(message),
+	commit := github.Commit{
+		Message: github.Ptr(message),
 		Tree:    tree,
 		Parents: []*github.Commit{{SHA: baseCommit.SHA}},
 	}
@@ -123,8 +130,12 @@ func (g *GitHub) CommitFiles(ctx context.Context, branch string, files []File, m
 		return fmt.Errorf("create commit: %w", err)
 	}
 
-	ref.Object.SHA = newCommit.SHA
-	_, _, err = g.client.Git.UpdateRef(ctx, g.owner, g.repo, ref, false)
+	// v89 addresses the ref by name and carries the new SHA in the request body,
+	// instead of mutating the *Reference returned by GetRef and posting it back.
+	// Force is omitted, which is the same non-forced update as the old `false`.
+	_, _, err = g.client.Git.UpdateRef(ctx, g.owner, g.repo, "refs/heads/"+branch, github.UpdateRef{
+		SHA: newCommit.GetSHA(),
+	})
 	if err != nil {
 		return fmt.Errorf("update ref: %w", err)
 	}
@@ -133,10 +144,10 @@ func (g *GitHub) CommitFiles(ctx context.Context, branch string, files []File, m
 
 func (g *GitHub) OpenPR(ctx context.Context, base, head, title, body string) (PullRequest, error) {
 	pr, _, err := g.client.PullRequests.Create(ctx, g.owner, g.repo, &github.NewPullRequest{
-		Title: github.String(title),
-		Head:  github.String(head),
-		Base:  github.String(base),
-		Body:  github.String(body),
+		Title: github.Ptr(title),
+		Head:  github.Ptr(head),
+		Base:  github.Ptr(base),
+		Body:  github.Ptr(body),
 	})
 	if err != nil {
 		return PullRequest{}, err
@@ -146,7 +157,7 @@ func (g *GitHub) OpenPR(ctx context.Context, base, head, title, body string) (Pu
 
 func (g *GitHub) CommentPR(ctx context.Context, number int, body string) error {
 	_, _, err := g.client.Issues.CreateComment(ctx, g.owner, g.repo, number, &github.IssueComment{
-		Body: github.String(body),
+		Body: github.Ptr(body),
 	})
 	return err
 }
