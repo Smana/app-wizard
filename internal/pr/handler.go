@@ -23,7 +23,7 @@ func (s *Service) Handler(providerFor ProviderForRequest, logger *slog.Logger) h
 	return func(w http.ResponseWriter, r *http.Request) {
 		provider, err := providerFor(r)
 		if err != nil {
-			httputil.WriteError(w, http.StatusUnauthorized, "not authenticated")
+			httputil.WriteProviderError(w, logger, err)
 			return
 		}
 

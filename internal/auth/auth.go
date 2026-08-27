@@ -5,7 +5,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -198,8 +197,10 @@ func (a *Auth) ProviderForRequest(r *http.Request) (gitprovider.Provider, error)
 	return a.factory(r.Context(), token)
 }
 
-// ErrUnauthenticated is returned when no user token is in the session.
-var ErrUnauthenticated = errors.New("auth: not authenticated")
+// ErrUnauthenticated is returned when no user token is in the session. It is the
+// httputil sentinel so handlers can tell it apart from a provider-construction
+// failure without importing this package.
+var ErrUnauthenticated = httputil.ErrUnauthenticated
 
 func (a *Auth) writeError(w http.ResponseWriter, status int, msg string) {
 	httputil.WriteError(w, status, msg)
