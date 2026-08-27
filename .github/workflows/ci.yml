@@ -23,8 +23,36 @@ jobs:
         run: go vet ./...
       - name: go build
         run: go build ./...
+      # -race because the schema pipeline caches under a mutex and the HTTP
+      # handlers read it concurrently; a data race there is a production bug the
+      # unit tests would otherwise pass straight over.
       - name: go test
-        run: go test ./...
+        run: go test -race ./...
+      # The schema tests are the drift guard between the form and the XRD. They
+      # skip themselves when their fixture is missing, and a silent skip reads
+      # exactly like a pass — assert they actually ran.
+      - name: no silently-skipped tests
+        run: |
+          skipped=$(go test ./... -v 2>&1 | grep -c '^--- SKIP' || true)
+          if [ "$skipped" -ne 0 ]; then
+            echo "::error::$skipped test(s) skipped; the schema drift guard is only real if it runs"
+            go test ./... -v 2>&1 | grep -A2 '^--- SKIP'
+            exit 1
+          fi
+
+  lint:
+    name: Go lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      # .golangci.yml has been in the repo since the split but nothing ran it.
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
 
   ui:
     name: UI build & test
@@ -40,5 +68,6 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - run: npm ci
+      - run: npm run lint
       - run: npm test
       - run: npm run build
