@@ -1,7 +1,7 @@
 // Recursive, schema-driven field widget. Given a JSONSchema node + its path in
 // the spec, it renders the right control and recurses for objects/arrays. It is
 // entirely generic — no field is hardcoded (FR-001 / SC-002).
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldError, UIHints } from "../api/types";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
@@ -9,6 +9,7 @@ import { Button } from "../components/ui/button";
 import { Input, Textarea } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Switch } from "../components/ui/collapsible";
+import { XIcon } from "../components/ui/icons";
 import { asSchema, type JSONSchema } from "./jsonSchema";
 import { deleteAt, getAt, pathToString, setAt, type PathSeg } from "./model";
 import { errorMatchesPath } from "./validation";
@@ -186,18 +187,21 @@ export function Field({
       );
 
     case "object":
-      // object with additionalProperties → key/value editor
+      // object with additionalProperties → map editor
       if (
         (!s.properties || Object.keys(s.properties).length === 0) &&
         s.additionalProperties
       ) {
         return (
-          <KeyValueField
+          <MapField
+            schema={s}
             path={path}
             spec={spec}
             onChange={onChange}
+            errors={errors}
             label={label}
             help={help_}
+            hints={hints}
           />
         );
       }
@@ -278,6 +282,24 @@ export function Field({
   }
 }
 
+// Icon-only destructive control. `size="icon"` carries the 40px hit area; the
+// visible glyph is smaller, which is why the accessible name is mandatory.
+function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      aria-label={label}
+      title={label}
+      className="text-muted-foreground hover:text-destructive"
+      onClick={onClick}
+    >
+      <XIcon />
+    </Button>
+  );
+}
+
 function ArrayField({
   schema,
   path,
@@ -309,14 +331,10 @@ function ArrayField({
           <div key={i} className="rounded-md border border-border/60 p-3">
             <div className="mb-2 flex items-center justify-between">
               <Badge variant="secondary">#{i + 1}</Badge>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
+              <RemoveButton
+                label={`Remove item ${i + 1}`}
                 onClick={() => onChange(deleteAt(spec, [...path, i]))}
-              >
-                Remove
-              </Button>
+              />
             </div>
             <Field
               schema={item}
@@ -341,67 +359,133 @@ function ArrayField({
   );
 }
 
-function KeyValueField({
+// Editor for an `additionalProperties` map (e.g. the App XRD's `configs` and
+// `labels`). Two things make this more than a list of pairs:
+//
+//   1. Row order lives in LOCAL state, not in the spec. An unnamed row has no
+//      key, and a key-less entry cannot be represented in a JSON object — so
+//      deriving the rows from the spec made "+ Add" write nothing and render
+//      nothing (the button was inert). Rows are local; the spec is the output.
+//   2. The value editor follows `additionalProperties`. When the map's values
+//      are objects (`configs` is `{path, content}`), a bare text input would
+//      produce a string where the schema demands an object and the claim would
+//      be rejected server-side. Object values recurse into <Field/>.
+function MapField({
+  schema,
   path,
   spec,
   onChange,
+  errors,
   label,
   help,
+  hints,
 }: {
+  schema: JSONSchema;
   path: PathSeg[];
   spec: unknown;
   onChange: (next: unknown) => void;
+  errors: FieldError[];
   label?: string;
   help?: string;
+  hints?: UIHints;
 }) {
-  const map = (getAt(spec, path) as Record<string, string> | undefined) ?? {};
-  const entries = Object.entries(map);
-  const setEntries = (next: [string, string][]) => {
-    const obj: Record<string, string> = {};
-    for (const [k, v] of next) if (k) obj[k] = v;
-    onChange(setAt(spec, path, Object.keys(obj).length ? obj : undefined));
+  const valueSchema = asSchema(schema.additionalProperties);
+  const objectValued =
+    valueSchema.type === "object" ||
+    !!(valueSchema.properties && Object.keys(valueSchema.properties).length > 0);
+
+  const map = (getAt(spec, path) as Record<string, unknown> | undefined) ?? {};
+  const specKeys = Object.keys(map);
+
+  const [rows, setRows] = useState<Array<{ id: number; key: string }>>(() =>
+    specKeys.map((key, i) => ({ id: i, key })),
+  );
+  const nextId = useRef(rows.length);
+
+  // Absorb keys that appeared in the spec from outside this widget (an edit-mode
+  // load, or the AI prefill assist). Keyed on the key set, so our own edits —
+  // which go through setRows first — don't re-append.
+  const specKeySignature = specKeys.join(" ");
+  useEffect(() => {
+    setRows((rs) => {
+      const known = new Set(rs.map((r) => r.key));
+      const missing = specKeys.filter((k) => !known.has(k));
+      if (missing.length === 0) return rs;
+      return [...rs, ...missing.map((key) => ({ id: nextId.current++, key }))];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specKeySignature]);
+
+  const emptyValue = () => (objectValued ? {} : "");
+
+  const renameKey = (id: number, from: string, to: string) => {
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, key: to } : r)));
+    // Move the value across so renaming a key never drops what was typed under it.
+    let next = spec;
+    const held = from ? getAt(spec, [...path, from]) : undefined;
+    if (from) next = deleteAt(next, [...path, from]);
+    if (to) next = setAt(next, [...path, to], held ?? emptyValue());
+    onChange(next);
   };
+
+  const removeRow = (id: number, key: string) => {
+    setRows((rs) => rs.filter((r) => r.id !== id));
+    if (key) onChange(deleteAt(spec, [...path, key]));
+  };
+
   return (
     <div className="space-y-2">
       {label && <Label>{label}</Label>}
       <Help text={help} />
-      {entries.map(([k, v], i) => (
-        <div key={i} className="flex gap-2">
-          <Input
-            placeholder="key"
-            value={k}
-            onChange={(e) => {
-              const next = [...entries] as [string, string][];
-              next[i] = [e.target.value, v];
-              setEntries(next);
-            }}
-          />
-          <Input
-            placeholder="value"
-            value={v}
-            onChange={(e) => {
-              const next = [...entries] as [string, string][];
-              next[i] = [k, e.target.value];
-              setEntries(next);
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => setEntries(entries.filter((_, j) => j !== i) as [string, string][])}
+      <div className="space-y-3">
+        {rows.map(({ id, key }) => (
+          <div
+            key={id}
+            className={objectValued ? "space-y-2 rounded-md border border-border/60 p-3" : undefined}
           >
-            ✕
-          </Button>
-        </div>
-      ))}
+            <div className="flex gap-2">
+              <Input
+                aria-label="Key"
+                placeholder="key"
+                value={key}
+                onChange={(e) => renameKey(id, key, e.target.value)}
+              />
+              {!objectValued && (
+                <Input
+                  aria-label="Value"
+                  placeholder="value"
+                  value={key ? String(getAt(spec, [...path, key]) ?? "") : ""}
+                  disabled={!key}
+                  onChange={(e) =>
+                    onChange(setAt(spec, [...path, key], e.target.value || undefined))
+                  }
+                />
+              )}
+              <RemoveButton label={`Remove ${key || "entry"}`} onClick={() => removeRow(id, key)} />
+            </div>
+            {objectValued &&
+              (key ? (
+                <Field
+                  schema={valueSchema}
+                  path={[...path, key]}
+                  spec={spec}
+                  onChange={onChange}
+                  errors={errors}
+                  hints={hints}
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">Name the entry to configure it.</p>
+              ))}
+          </div>
+        ))}
+      </div>
       <Button
         type="button"
         size="sm"
         variant="outline"
-        onClick={() => setEntries([...entries, ["", ""]] as [string, string][])}
+        onClick={() => setRows((rs) => [...rs, { id: nextId.current++, key: "" }])}
       >
-        + Add pair
+        + Add entry
       </Button>
     </div>
   );
