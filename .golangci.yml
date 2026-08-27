@@ -1,5 +1,5 @@
 # golangci-lint v2 config for the app-wizard module.
-# Run: golangci-lint run ./...  (from container-images/app-wizard)
+# Run: golangci-lint run ./...  (from the repository root)
 version: "2"
 
 run:
