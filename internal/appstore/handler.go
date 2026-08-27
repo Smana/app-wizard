@@ -21,7 +21,7 @@ func (s *Store) ListHandler(providerFor ProviderForRequest, logger *slog.Logger)
 	return func(w http.ResponseWriter, r *http.Request) {
 		provider, err := providerFor(r)
 		if err != nil {
-			httputil.WriteError(w, http.StatusUnauthorized, "not authenticated")
+			httputil.WriteProviderError(w, logger, err)
 			return
 		}
 		apps, err := s.List(r.Context(), provider)
@@ -45,7 +45,7 @@ func (s *Store) GetHandler(providerFor ProviderForRequest, logger *slog.Logger) 
 	return func(w http.ResponseWriter, r *http.Request) {
 		provider, err := providerFor(r)
 		if err != nil {
-			httputil.WriteError(w, http.StatusUnauthorized, "not authenticated")
+			httputil.WriteProviderError(w, logger, err)
 			return
 		}
 		stack := r.PathValue("stack")
