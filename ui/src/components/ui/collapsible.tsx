@@ -82,26 +82,34 @@ export function Switch({
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        // The visible track is 24×44px, but the control is what you have to hit.
-        // The ::after pseudo-element extends the hit area to 44px tall without
-        // changing the layout — the track alone was 20px, half the usable
-        // minimum, on a form where toggles decide things like public exposure.
-        "group relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border",
-        "after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']",
-        "transition-colors duration-150 ease-out",
+        // The BUTTON is the hit target and is a real 40px tall, so it occupies
+        // the space it claims. The 24px pill is drawn by the inner span.
+        //
+        // Not a ::after overlay: that version spilled ~10px above and below the
+        // control, painting over the neighbouring field's label and eating
+        // clicks meant for it. Two controls' hit areas must never overlap, and
+        // an overlay that the layout knows nothing about cannot honour that.
+        "group inline-flex h-10 shrink-0 items-center rounded-md",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        // Themed tokens, not hardcoded slate: the off state used to be a light
-        // grey track that floated on the dark navy surface.
-        checked ? "border-primary bg-primary" : "border-border bg-muted",
       )}
     >
       <span
         className={cn(
-          "pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-border transition-transform duration-150 ease-out",
-          checked ? "translate-x-[22px] bg-primary-foreground" : "translate-x-0.5 bg-background",
+          "pointer-events-none inline-flex h-6 w-11 items-center rounded-full border",
+          "transition-colors duration-150 ease-out",
+          // Themed tokens, not hardcoded slate: the off state used to be a light
+          // grey track that floated on the dark navy surface.
+          checked ? "border-primary bg-primary" : "border-border bg-muted",
         )}
-      />
+      >
+        <span
+          className={cn(
+            "inline-block h-5 w-5 transform rounded-full shadow-border transition-transform duration-150 ease-out",
+            checked ? "translate-x-[22px] bg-primary-foreground" : "translate-x-0.5 bg-background",
+          )}
+        />
+      </span>
     </button>
   );
 }

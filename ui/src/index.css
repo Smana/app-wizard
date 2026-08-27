@@ -131,22 +131,25 @@ h4 {
   text-wrap: balance;
 }
 
+/* Only the elements that actually wrap. `label` and `legend` in this form are
+   short single-line strings that can never produce the orphan `pretty` prevents,
+   and it is a multi-pass algorithm paid at every layout. */
 p,
-li,
-legend,
-label {
+li {
   text-wrap: pretty;
 }
 
-/* Any number that changes while you look at it gets equal-width digits, so the
-   layout doesn't twitch as it updates (field counts, resource counts, ports). */
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
+/* No `.tabular-nums` rule here: Tailwind's fontVariantNumeric plugin already
+   emits that utility, and redefining it later in the sheet shadowed Tailwind's
+   composed custom-property version — silently breaking any future combination
+   with `slashed-zero` / `ordinal`. The class in the JSX is the framework's. */
 
-/* Images carry a hairline edge so avatars and logos sit on the surface instead
-   of bleeding into it. */
-img {
+/* Hairline edge so an avatar sits on the surface instead of bleeding into it.
+   Opt-in via a class rather than a bare `img` selector: as an element rule it
+   also boxed the configurable branding logo, and a transparent-background PNG or
+   SVG — the normal case for a header logo — then showed a rectangle around its
+   whole bounding box, transparent padding included. */
+.img-outline {
   outline: 1px solid var(--image-outline);
   outline-offset: -1px;
 }

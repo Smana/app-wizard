@@ -16,7 +16,7 @@ import { asSchema, type JSONSchema } from "./jsonSchema";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { XIcon } from "../components/ui/icons";
+import { RemoveButton } from "./Field";
 
 interface EnvVar {
   name?: string;
@@ -81,16 +81,10 @@ export function SecretsEditor({ spec, onChange, envPath, secretsPath, secretsSch
                 onChange(setAt(spec, [...envPath, i, "value"], e.target.value || undefined))
               }
             />
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label={`Remove ${row.name || `env var ${i + 1}`}`}
-              className="text-muted-foreground hover:text-destructive"
+            <RemoveButton
+              label={`Remove ${row.name || `env var ${i + 1}`}`}
               onClick={() => onChange(deleteAt(spec, [...envPath, i]))}
-            >
-              <XIcon />
-            </Button>
+            />
           </div>
         ))}
         <Button
@@ -128,16 +122,10 @@ export function SecretsEditor({ spec, onChange, envPath, secretsPath, secretsSch
                 onChange(setAt(spec, [...secretsPath, i, "remoteRef"], e.target.value || undefined))
               }
             />
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label={`Remove ${row.name || `secret reference ${i + 1}`}`}
-              className="text-muted-foreground hover:text-destructive"
+            <RemoveButton
+              label={`Remove ${row.name || `secret reference ${i + 1}`}`}
               onClick={() => onChange(deleteAt(spec, [...secretsPath, i]))}
-            >
-              <XIcon />
-            </Button>
+            />
           </div>
         ))}
         <Button
