@@ -61,6 +61,30 @@ fields:
     label: HTTP route
     order: 2
 
+  # Dotted child hints are NOT optional for a basic-tier object. Field.tsx limits
+  # an object's children on the first screen to those that are basic-tier or
+  # required by the schema; a parent hinted `basic` whose children are unhinted
+  # therefore renders as an empty labelled box. These are what make `service` and
+  # `route` actually contain their inputs on the first screen.
+  service.port:
+    tier: basic
+    label: Port
+    order: 1
+  route.enabled:
+    tier: basic
+    label: Enable HTTP route
+    order: 1
+  route.hostname:
+    tier: basic
+    label: Hostname
+    example: api.example.com
+    order: 2
+  route.internetFacing:
+    tier: basic
+    label: Internet-facing
+    help: Serve on the public internet rather than privately.
+    order: 3
+
   autoscaling:
     tier: advanced
     group: scaling
