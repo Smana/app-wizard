@@ -14,9 +14,10 @@ ARG APP_WIZARD_VERSION=v0.1.0
 # fails with:
 #   crossplane render failed: exec: "crossplane": executable file not found in $PATH
 #
-# Kept in step with the Crossplane running on the cluster (v2.3.3) so the renderer
-# behaves the way the cluster will. The CLI's release artifact is named `crank`.
-ARG CROSSPLANE_VERSION=v2.3.3
+# Kept in step with the Crossplane running on the cluster so the renderer behaves
+# the way the cluster will — bump this whenever that Helm chart version moves.
+# The CLI's release artifact is named `crank`.
+ARG CROSSPLANE_VERSION=v2.4.0
 
 # ---------- UI build ----------
 FROM node:22-alpine AS ui
