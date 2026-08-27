@@ -53,7 +53,7 @@ jobs:
       # Pinned rather than `latest`: the linter must be built with a Go at least
       # as new as the toolchain above, or it panics parsing the source
       # ("file requires newer Go version"). v2.13.1 is built with go1.27.0.
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.13.1
 

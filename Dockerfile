@@ -16,7 +16,6 @@ ARG APP_WIZARD_VERSION=v0.1.0
 #
 # Kept in step with the Crossplane running on the cluster so the renderer behaves
 # the way the cluster will — bump this whenever that Helm chart version moves.
-# The CLI's release artifact is named `crank`.
 ARG CROSSPLANE_VERSION=v2.4.0
 
 # ---------- UI build ----------
@@ -45,13 +44,21 @@ FROM alpine:3.24 AS crossplane-cli
 ARG TARGETOS
 ARG TARGETARCH
 ARG CROSSPLANE_VERSION
+# The CLI moved hosts. Up to v2.3.4 it was a bare `crank` binary on
+# releases.crossplane.io; from v2.3.5 that channel publishes only the CORE
+# binary under the name `crossplane`, and the CLI ships as a tarball from
+# cli.crossplane.io (see the upstream install.sh). Fetching `crank` from the old
+# location now 404s, which is a build-time failure, not a silent one.
 RUN apk add --no-cache curl \
-    && curl -fsSL -o /out-crossplane \
-       "https://releases.crossplane.io/stable/${CROSSPLANE_VERSION}/bin/${TARGETOS}_${TARGETARCH}/crank" \
+    && curl -fsSL -o /tmp/crossplane-cli.tar.gz \
+       "https://cli.crossplane.io/stable/${CROSSPLANE_VERSION}/bundle/${TARGETOS}_${TARGETARCH}/crossplane-cli.tar.gz" \
+    && tar xzf /tmp/crossplane-cli.tar.gz -C /tmp \
+    && mv /tmp/crossplane /out-crossplane \
     && chmod 0755 /out-crossplane \
-    # Fail the build here rather than at runtime if the download silently 404s into
-    # an HTML error page: a non-executable "binary" would only surface as a broken
-    # preview in production.
+    # Fail the build here rather than at runtime if the download silently
+    # produces something that is not the CLI: a broken binary would otherwise
+    # only surface as a broken preview in production. `version --client` is the
+    # discriminator — the CORE binary does not have it.
     && /out-crossplane version --client
 
 # ---------- crossplane CORE engine ----------
