@@ -6,7 +6,9 @@
 # `make dev` runs the wizard against this file with AUTH_MODE=dev (no GitHub) and
 # the render preview off, so it works offline with no Crossplane cluster.
 
-# The GitOps repository PRs are opened against.
+# The GitOps repository PRs are opened against. owner + name are REQUIRED — the
+# wizard will not start without them rather than guess at a repository to write
+# to. Same for schema.xrdPath below.
 repo:
   owner: your-org
   name: your-gitops-repo
@@ -41,7 +43,7 @@ branding:
 # LLM assists (optional). Assists turn ON when LLM_API_KEY (env-only — never in
 # this file) or a baseUrl is set; leaving both unset keeps them off, as here.
 assists:
-  # model: claude-opus-4-8
+  # model: claude-opus-5
   # baseUrl: https://api.anthropic.com
 
 # Authentication. `dev` bypasses login for local use; `github` is the real mode.

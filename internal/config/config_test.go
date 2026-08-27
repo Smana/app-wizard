@@ -18,34 +18,81 @@ func writeConfig(t *testing.T, body string) {
 	t.Setenv("WIZARD_CONFIG", p)
 }
 
-// TestLoad_PureEnvDefaults: with no config file, Load reproduces the historical
-// env/defaults behaviour, plus the new SPEC-009 defaults.
-func TestLoad_PureEnvDefaults(t *testing.T) {
+// TestLoad_UnconfiguredFailsClosed: with nothing configured, Load must NOT
+// invent a target repository. It used to default to Smana/cloud-native-ref —
+// this project's own origin repo — so a wizard whose config mount failed to land
+// came up happily pointed at someone else's GitOps repo, which is where it opens
+// pull requests.
+func TestLoad_UnconfiguredFailsClosed(t *testing.T) {
 	t.Setenv("WIZARD_CONFIG", "") // no file → default path is absent in CI
 	t.Setenv("REPO_OWNER", "")
 	t.Setenv("REPO_NAME", "")
+	t.Setenv("XRD_PATH", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load succeeded with no repo/XRD configured; want a hard error")
+	}
+	for _, want := range []string{"repo.owner", "repo.name", "schema.xrdPath"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name the missing key %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "cloud-native-ref") {
+		t.Errorf("error still references the origin repo: %v", err)
+	}
+}
+
+// TestLoad_MinimalDefaults: with the un-defaultable keys supplied, everything
+// else falls back to the neutral defaults.
+func TestLoad_MinimalDefaults(t *testing.T) {
+	t.Setenv("WIZARD_CONFIG", "")
+	t.Setenv("REPO_OWNER", "acme")
+	t.Setenv("REPO_NAME", "gitops")
+	t.Setenv("XRD_PATH", "xrds/app.yaml")
+	t.Setenv("RENDER_ENABLED", "false")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.RepoOwner != "Smana" || cfg.RepoName != "cloud-native-ref" {
-		t.Errorf("repo defaults = %s/%s", cfg.RepoOwner, cfg.RepoName)
-	}
 	if cfg.Layout != "apps/{stack}/{app}" {
 		t.Errorf("Layout default = %q", cfg.Layout)
 	}
-	if !cfg.RenderEnabled {
-		t.Errorf("RenderEnabled default = false, want true")
-	}
 	if cfg.BrandingTitle != "App Wizard" {
 		t.Errorf("BrandingTitle default = %q", cfg.BrandingTitle)
+	}
+	if cfg.RepoBaseBranch != "main" {
+		t.Errorf("RepoBaseBranch default = %q", cfg.RepoBaseBranch)
+	}
+}
+
+// TestLoad_RenderPathsRequiredOnlyWhenEnabled: the render preview needs the
+// composition/functions paths; the form and PR flow do not.
+func TestLoad_RenderPathsRequiredOnlyWhenEnabled(t *testing.T) {
+	t.Setenv("WIZARD_CONFIG", "")
+	t.Setenv("REPO_OWNER", "acme")
+	t.Setenv("REPO_NAME", "gitops")
+	t.Setenv("XRD_PATH", "xrds/app.yaml")
+	t.Setenv("COMPOSITION_PATH", "")
+	t.Setenv("FUNCTIONS_PATH", "")
+
+	t.Setenv("RENDER_ENABLED", "true")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "compositionPath") {
+		t.Fatalf("render on + no compositionPath should fail, got %v", err)
+	}
+
+	t.Setenv("RENDER_ENABLED", "false")
+	if _, err := Load(); err != nil {
+		t.Fatalf("render off should not require render paths: %v", err)
 	}
 }
 
 // TestLoad_FileValues: wizard.yaml values flow into Config.
 func TestLoad_FileValues(t *testing.T) {
 	t.Setenv("REPO_OWNER", "")
+	t.Setenv("REPO_NAME", "")
+	t.Setenv("XRD_PATH", "")
 	t.Setenv("LAYOUT", "")
 	writeConfig(t, `
 repo:
@@ -90,8 +137,10 @@ branding:
 
 // TestLoad_EnvOverridesFile: an env var wins over the file value.
 func TestLoad_EnvOverridesFile(t *testing.T) {
-	writeConfig(t, "repo:\n  owner: fromfile\n")
+	writeConfig(t, "repo:\n  owner: fromfile\n  name: platform\nschema:\n  xrdPath: xrds/app.yaml\n")
 	t.Setenv("REPO_OWNER", "fromenv")
+	t.Setenv("REPO_NAME", "")
+	t.Setenv("XRD_PATH", "")
 	t.Setenv("RENDER_ENABLED", "false")
 
 	cfg, err := Load()
