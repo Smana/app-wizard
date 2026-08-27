@@ -1,8 +1,10 @@
 // Package config loads the app-wizard runtime configuration from an optional
-// wizard.yaml file overlaid by the environment (defaults → file → env). All
-// values have local-dev-friendly defaults so `go run` works without any setup;
-// secrets (OAuth client secret, session key, LLM key) come from the environment
-// only, are rejected if present in the file, and are never logged.
+// wizard.yaml file overlaid by the environment (defaults → file → env). Most
+// values carry a neutral default; the few that identify a specific deployment
+// (which repo to open PRs against, which XRD to build the form from) have none
+// and fail the load when unset — see requireDeploymentConfig. Secrets (OAuth
+// client secret, session key, LLM key) come from the environment only, are
+// rejected if present in the file, and are never logged.
 package config
 
 import (
@@ -95,7 +97,7 @@ type Config struct {
 	// available (supports a keyless gateway).
 	LLMBaseURL string
 	// LLMModel is the model id used for assists (LLM_MODEL, default
-	// "claude-opus-4-8").
+	// "claude-opus-5").
 	LLMModel string
 
 	// --- Agnostic-deployment knobs (SPEC-009). Introduced by the config-file
@@ -134,25 +136,28 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		ListenAddr:          pick("LISTEN_ADDR", "", ":8080"),
-		AuthMode:            strings.ToLower(pick("AUTH_MODE", fc.Auth.Mode, "github")),
-		GitHubClientID:      os.Getenv("GITHUB_CLIENT_ID"),
-		GitHubClientSecret:  os.Getenv("GITHUB_CLIENT_SECRET"),
-		OAuthRedirectURL:    pick("OAUTH_REDIRECT_URL", fc.Auth.RedirectURL, "http://localhost:8080/api/auth/callback"),
-		RepoOwner:           pick("REPO_OWNER", fc.Repo.Owner, "Smana"),
-		RepoName:            pick("REPO_NAME", fc.Repo.Name, "cloud-native-ref"),
+		ListenAddr:         pick("LISTEN_ADDR", "", ":8080"),
+		AuthMode:           strings.ToLower(pick("AUTH_MODE", fc.Auth.Mode, "github")),
+		GitHubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		OAuthRedirectURL:   pick("OAUTH_REDIRECT_URL", fc.Auth.RedirectURL, "http://localhost:8080/api/auth/callback"),
+		// repo.owner/name and schema.xrdPath deliberately have no default — an
+		// invented one silently targets the wrong repository. See
+		// requireDeploymentConfig.
+		RepoOwner:           pick("REPO_OWNER", fc.Repo.Owner, ""),
+		RepoName:            pick("REPO_NAME", fc.Repo.Name, ""),
 		RepoBaseBranch:      pick("REPO_BASE_BRANCH", fc.Repo.BaseBranch, "main"),
 		XRDSource:           XRDSourceMode(strings.ToLower(pick("XRD_SOURCE", "", string(SourceLocal)))),
 		RepoRoot:            pick("REPO_ROOT", "", defaultRepoRoot()),
-		XRDPath:             pick("XRD_PATH", fc.Schema.XRDPath, "infrastructure/base/crossplane/configuration/app-definition.yaml"),
+		XRDPath:             pick("XRD_PATH", fc.Schema.XRDPath, ""),
 		UIHintsPath:         pick("UI_HINTS_PATH", fc.Schema.UIHintsPath, ""),
 		StacksPath:          pick("STACKS_PATH", fc.Schema.StacksPath, "apps/stacks.yaml"),
-		CompositionPath:     pick("COMPOSITION_PATH", fc.Render.CompositionPath, "infrastructure/base/crossplane/configuration/app-composition.yaml"),
-		FunctionsPath:       pick("FUNCTIONS_PATH", fc.Render.FunctionsPath, "infrastructure/base/crossplane/configuration/functions.yaml"),
-		EnvConfigPath:       pick("ENVCONFIG_PATH", fc.Render.EnvConfigPath, "infrastructure/base/crossplane/configuration/environmentconfig.yaml"),
+		CompositionPath:     pick("COMPOSITION_PATH", fc.Render.CompositionPath, ""),
+		FunctionsPath:       pick("FUNCTIONS_PATH", fc.Render.FunctionsPath, ""),
+		EnvConfigPath:       pick("ENVCONFIG_PATH", fc.Render.EnvConfigPath, ""),
 		LLMAPIKey:           os.Getenv("LLM_API_KEY"),
 		LLMBaseURL:          pick("LLM_BASE_URL", fc.Assists.BaseURL, ""),
-		LLMModel:            pick("LLM_MODEL", fc.Assists.Model, "claude-opus-4-8"),
+		LLMModel:            pick("LLM_MODEL", fc.Assists.Model, "claude-opus-5"),
 		FunctionsDevTargets: parseKVList(pick("FUNCTIONS_DEV_TARGETS", fc.Render.FunctionsDevTargets, "")),
 		Layout:              pick("LAYOUT", fc.Layout, "apps/{stack}/{app}"),
 		RenderEnabled:       pickBool("RENDER_ENABLED", fc.Render.Enabled, true),
@@ -172,6 +177,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("layout %q must contain the {app} token", cfg.Layout)
 	}
 
+	if err := requireDeploymentConfig(cfg); err != nil {
+		return nil, err
+	}
+
 	if cfg.UIHintsPath == "" {
 		// ui-hints.yaml defaults beside the working directory.
 		cfg.UIHintsPath = filepath.Join(defaultRepoRoot(), "ui-hints.yaml")
@@ -188,6 +197,46 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// requireDeploymentConfig fails the load when a key that CANNOT have a sensible
+// default is missing.
+//
+// These used to default to this project's origin repository
+// (Smana/cloud-native-ref) and to XRD/composition paths from its pre-extraction
+// layout. Both were wrong in the same way: an operator who forgot to mount
+// wizard.yaml got a wizard silently pointed at someone else's GitOps repo — the
+// repo PRs would be opened against — and at file paths that no longer exist in
+// any repository. There is no honest default for "which repo do I write to";
+// say so at startup instead of guessing.
+func requireDeploymentConfig(cfg *Config) error {
+	var missing []string
+	if cfg.RepoOwner == "" {
+		missing = append(missing, "repo.owner (REPO_OWNER)")
+	}
+	if cfg.RepoName == "" {
+		missing = append(missing, "repo.name (REPO_NAME)")
+	}
+	if cfg.XRDPath == "" {
+		missing = append(missing, "schema.xrdPath (XRD_PATH)")
+	}
+	// Render paths matter only when the preview is on; the form and the PR flow
+	// work without them.
+	if cfg.RenderEnabled {
+		if cfg.CompositionPath == "" {
+			missing = append(missing, "render.compositionPath (COMPOSITION_PATH) — or set render.enabled: false")
+		}
+		if cfg.FunctionsPath == "" {
+			missing = append(missing, "render.functionsPath (FUNCTIONS_PATH) — or set render.enabled: false")
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf(
+			"incomplete configuration — set %s in wizard.yaml or the environment (see docs/configuration.md)",
+			strings.Join(missing, ", "),
+		)
+	}
+	return nil
 }
 
 // pick returns the first non-empty of: env[key], fileVal, def. This is how the

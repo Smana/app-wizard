@@ -20,29 +20,42 @@ key there fails the load closed. Set them in the environment:
 | `SESSION_KEY` | Signs the session cookie (a random ephemeral key is generated when unset — sessions won't survive a restart) |
 | `LLM_API_KEY` | LLM assist API key (enables assists) |
 
+## Required keys
+
+Three keys identify **which** deployment this is, and have no default — the
+wizard refuses to start without them rather than guess:
+
+| `wizard.yaml` | Env override | Why there is no default |
+|---------------|--------------|-------------------------|
+| `repo.owner` | `REPO_OWNER` | This is the repo pull requests are opened **against**. A default would point a misconfigured wizard at someone else's repository. |
+| `repo.name` | `REPO_NAME` | Same. |
+| `schema.xrdPath` | `XRD_PATH` | The entire form is generated from this file; every platform stores it somewhere different. |
+
+`render.compositionPath` and `render.functionsPath` join them when
+`render.enabled` is `true` (the default). Turn the preview off with
+`render.enabled: false` if you don't want to supply them — validation and the PR
+flow are independent of it.
+
 ## `wizard.yaml` keys
 
-Every key is optional; the default reproduces a cloud-native-ref-style deployment.
-Each has an environment override (env wins).
+Everything below is optional and has a neutral default. Each has an environment
+override (env wins).
 
 | `wizard.yaml` | Env override | Default | Purpose |
 |---------------|--------------|---------|---------|
-| `repo.owner` | `REPO_OWNER` | `Smana` | GitOps repo owner PRs open against |
-| `repo.name` | `REPO_NAME` | `cloud-native-ref` | GitOps repo name |
 | `repo.baseBranch` | `REPO_BASE_BRANCH` | `main` | PR base branch |
-| `schema.xrdPath` | `XRD_PATH` | `infrastructure/base/crossplane/configuration/app-definition.yaml` | XRD the form is generated from (resolved under `REPO_ROOT`) |
 | `schema.stacksPath` | `STACKS_PATH` | `apps/stacks.yaml` | Stack registry (dropdown) |
-| `schema.uiHintsPath` | `UI_HINTS_PATH` | `<repo-root>/ui-hints.yaml` | Presentation overlay |
+| `schema.uiHintsPath` | `UI_HINTS_PATH` | `<repo-root>/ui-hints.yaml` | Presentation overlay (absent ⇒ every field defaults to the advanced tier) |
 | `layout` | `LAYOUT` | `apps/{stack}/{app}` | PR file-layout template (`{stack}`/`{app}` tokens; last segment is the app dir) |
 | `render.enabled` | `RENDER_ENABLED` | `true` | Crossplane render preview + PR comment. When `false`, validation + PR still work |
-| `render.compositionPath` | `COMPOSITION_PATH` | `.../app-composition.yaml` | Composition for `crossplane render` |
-| `render.functionsPath` | `FUNCTIONS_PATH` | `.../functions.yaml` | Functions for `crossplane render` |
-| `render.envConfigPath` | `ENVCONFIG_PATH` | `.../environmentconfig.yaml` | EnvironmentConfig for `crossplane render` |
+| `render.compositionPath` | `COMPOSITION_PATH` | — (required when render is on) | Composition for `crossplane render` |
+| `render.functionsPath` | `FUNCTIONS_PATH` | — (required when render is on) | Functions for `crossplane render` |
+| `render.envConfigPath` | `ENVCONFIG_PATH` | — | EnvironmentConfig for `crossplane render` |
 | `render.functionsDevTargets` | `FUNCTIONS_DEV_TARGETS` | — | `name=host:port,…` in-pod function gRPC endpoints (sidecar render) |
 | `branding.title` | `BRAND_TITLE` | `App Wizard` | App title (header + document title) |
 | `branding.logoUrl` | `BRAND_LOGO_URL` | — | Header logo URL (no logo when unset) |
 | `branding.theme` | — (file-only) | — | CSS custom properties applied to `:root` (keys map to the wizard's `--var` names) |
-| `assists.model` | `LLM_MODEL` | `claude-opus-4-8` | Assist model id |
+| `assists.model` | `LLM_MODEL` | `claude-opus-5` | Assist model id |
 | `assists.baseUrl` | `LLM_BASE_URL` | — | Anthropic-compatible endpoint (also marks assists available) |
 | `auth.mode` | `AUTH_MODE` | `github` | `github` (OAuth) or `dev` (local bypass) |
 | `auth.redirectUrl` | `OAUTH_REDIRECT_URL` | `http://localhost:8080/api/auth/callback` | OAuth callback |
