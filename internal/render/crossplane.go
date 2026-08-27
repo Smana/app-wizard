@@ -261,13 +261,13 @@ func roleForKind(kind string) string {
 	case "CiliumNetworkPolicy":
 		return "network policy (zero-trust)"
 	case "ExternalSecret":
-		return "syncs secrets from AWS Secrets Manager"
+		return "syncs secrets from the external secret store"
 	case "ServiceAccount":
 		return "workload identity"
 	case "SQLInstance":
 		return "managed PostgreSQL database"
-	case "Bucket", "ObjectStorage":
-		return "S3 object storage"
+	case "Bucket", "ObjectStore", "ObjectStorage":
+		return "object storage bucket"
 	case "ConfigMap":
 		return "configuration data"
 	case "VMServiceScrape", "ServiceMonitor":

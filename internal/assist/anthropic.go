@@ -30,7 +30,7 @@ Follow these Cilium authoring rules exactly — violating them produces policies
 
 3. matchPattern is a single-segment glob: it does NOT span dots. "*.example.com" matches "cdn.example.com" but NOT "a.b.example.com". Prefer matchName for exact hosts, or list each concrete subdomain explicitly, rather than relying on a wildcard that will miss deeper subdomains.
 
-4. For host-network or link-local dependencies — most importantly AWS access via the EKS Pod Identity Agent at 169.254.170.23:80 — do NOT use toCIDR. That endpoint runs on the node's host network, so Cilium classifies it as the "host" entity and a toCIDR rule silently fails. Use toEntities ["host"] scoped to toPorts TCP 80 instead.
+4. For host-network or link-local dependencies — cloud identity and metadata endpoints, such as the EKS Pod Identity Agent at 169.254.170.23:80 or the GCP metadata server at 169.254.169.254:80 — do NOT use toCIDR. Those endpoints run on the node's host network, so Cilium classifies them as the "host" entity and a toCIDR rule silently fails. Use toEntities ["host"] scoped to the right toPorts instead.
 
 Emit only the rules the description justifies. When in doubt, prefer fewer, tighter rules over broad ones.`
 
@@ -55,8 +55,9 @@ type AnthropicAssist struct {
 }
 
 // NewAnthropicAssist builds an AnthropicAssist from config. The API key and base
-// URL come from config; neither is logged here. When cfg.LLMModel is empty the
-// SDK default Opus 4.8 constant is used.
+// URL come from config; neither is logged here. cfg.LLMModel always carries a
+// value (config.Load defaults it); the constant below is only a belt-and-braces
+// fallback for a zero-value Config built in a test.
 func NewAnthropicAssist(cfg *config.Config) *AnthropicAssist {
 	opts := []option.RequestOption{}
 	if cfg.LLMAPIKey != "" {
@@ -67,7 +68,7 @@ func NewAnthropicAssist(cfg *config.Config) *AnthropicAssist {
 	}
 	client := anthropic.NewClient(opts...)
 
-	model := anthropic.ModelClaudeOpus4_8
+	model := anthropic.Model("claude-opus-5")
 	if cfg.LLMModel != "" {
 		model = anthropic.Model(cfg.LLMModel)
 	}

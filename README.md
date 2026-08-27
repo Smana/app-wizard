@@ -67,7 +67,7 @@ by setting `LLM_API_KEY` (env-only) and, optionally, `assists.baseUrl` /
 
 ```yaml
 assists:
-  model: claude-opus-4-8
+  model: claude-opus-5
   baseUrl: https://api.anthropic.com   # or any Anthropic-compatible gateway
 ```
 
