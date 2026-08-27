@@ -3,7 +3,7 @@
 #
 # Stage 1: build the SPA into internal/web/dist.
 # Stage 2: build the Go binary embedding that dist via go:embed.
-# Stage 3: fetch the crossplane CLI (the render preview shells out to it).
+# Stage 3: fetch the crossplane CLI + core engine (the render preview needs both).
 # Stage 4: distroless runtime, non-root.
 
 ARG APP_WIZARD_VERSION=v0.1.0
@@ -39,45 +39,63 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/app-wizard ./cmd/app-wizard
 
-# ---------- crossplane CLI ----------
-FROM alpine:3.24 AS crossplane-cli
+# ---------- crossplane binaries ----------
+# The render preview needs BOTH halves, under two different names on $PATH:
+#
+#   crossplane       the CLI / driver. `crossplane render` is here.
+#   crossplane-core  the engine. `crossplane render` shells out to
+#                    `<--crossplane-binary> internal render`, which ONLY the core
+#                    binary implements; the CLI answers `unexpected argument
+#                    internal` (exit 80).
+#
+# They ship from two different places, and both moved:
+#   - releases.crossplane.io published a bare `crank` (the CLI) up to v2.3.4. From
+#     v2.3.5 it publishes only the CORE binary, confusingly named `crossplane`.
+#   - The CLI moved to cli.crossplane.io as a crossplane-cli.tar.gz bundle
+#     (see upstream install.sh).
+# Fetching `crank` from the old location 404s on anything >= v2.3.5.
+#
+# Integrity: the CORE binary is verified against its published .sha256 (a bare hex
+# digest with no filename, so `sha256sum -c` cannot parse it and the compare is
+# done by hand). The CLI bundle is NOT checksum-verified, deliberately — the
+# crossplane.sha256 inside the tarball matches neither the binary it ships with
+# nor the tarball itself, and upstream's own install.sh deletes that file without
+# ever checking it (`rm "${BIN}.sha256"`). Asserting on it fails the build on a
+# perfectly good download. Do not "fix" this by re-adding the check; the CLI's
+# integrity gate is the `version --client` discriminator below.
+FROM alpine:3.24 AS crossplane-bins
 ARG TARGETOS
 ARG TARGETARCH
 ARG CROSSPLANE_VERSION
-# The CLI moved hosts. Up to v2.3.4 it was a bare `crank` binary on
-# releases.crossplane.io; from v2.3.5 that channel publishes only the CORE
-# binary under the name `crossplane`, and the CLI ships as a tarball from
-# cli.crossplane.io (see the upstream install.sh). Fetching `crank` from the old
-# location now 404s, which is a build-time failure, not a silent one.
-RUN apk add --no-cache curl \
-    && curl -fsSL -o /tmp/crossplane-cli.tar.gz \
-       "https://cli.crossplane.io/stable/${CROSSPLANE_VERSION}/bundle/${TARGETOS}_${TARGETARCH}/crossplane-cli.tar.gz" \
-    && tar xzf /tmp/crossplane-cli.tar.gz -C /tmp \
-    && mv /tmp/crossplane /out-crossplane \
-    && chmod 0755 /out-crossplane \
-    # Fail the build here rather than at runtime if the download silently
-    # produces something that is not the CLI: a broken binary would otherwise
-    # only surface as a broken preview in production. `version --client` is the
-    # discriminator — the CORE binary does not have it.
-    && /out-crossplane version --client
-
-# ---------- crossplane CORE engine ----------
-# The crank/CLI above is only the render DRIVER. `crossplane render` shells out to
-# `<--crossplane-binary> internal render`, and `internal render` is implemented ONLY
-# by the crossplane CORE binary — the crank/CLI has no `internal` command and fails
-# with `crossplane: error: unexpected argument internal` (exit 80). The core binary
-# is not published on releases.crossplane.io, so extract it from the same-versioned
-# controller image (kept in lockstep with CROSSPLANE_VERSION). Its `/bin/crossplane`
-# is a symlink into the image's /nix/store, so resolve and copy the real target.
-FROM xpkg.crossplane.io/crossplane/crossplane:${CROSSPLANE_VERSION} AS crossplane-core-img
-
-FROM alpine:3.24 AS crossplane-core
-COPY --from=crossplane-core-img / /core-root/
-RUN set -eux \
-    && cp "/core-root$(readlink /core-root/bin/crossplane)" /out-crossplane-core \
-    && chmod 0755 /out-crossplane-core \
-    # Fail the build here if this isn't the core engine (the CLI lacks `internal`).
-    && /out-crossplane-core internal render --help >/dev/null
+RUN set -eux; \
+    apk add --no-cache curl; \
+    \
+    # --- CLI (driver) ---
+    curl -fsSL -o /tmp/cli.tar.gz \
+      "https://cli.crossplane.io/stable/${CROSSPLANE_VERSION}/bundle/${TARGETOS}_${TARGETARCH}/crossplane-cli.tar.gz"; \
+    tar xzf /tmp/cli.tar.gz -C /tmp; \
+    mv /tmp/crossplane /out-crossplane; \
+    chmod 0755 /out-crossplane; \
+    rm -f /tmp/crossplane.sha256; \
+    \
+    # --- core engine ---
+    # Published directly since v2.3.5, so this no longer pulls the whole
+    # controller image and copies its rootfs to dig a binary out of /nix/store.
+    curl -fsSL -o /out-crossplane-core \
+      "https://releases.crossplane.io/stable/${CROSSPLANE_VERSION}/bin/${TARGETOS}_${TARGETARCH}/crossplane"; \
+    curl -fsSL -o /tmp/core.sha256 \
+      "https://releases.crossplane.io/stable/${CROSSPLANE_VERSION}/bin/${TARGETOS}_${TARGETARCH}/crossplane.sha256"; \
+    expected="$(cat /tmp/core.sha256)"; \
+    actual="$(sha256sum /out-crossplane-core | cut -d' ' -f1)"; \
+    [ "$expected" = "$actual" ] || { echo "core checksum mismatch: $actual != $expected" >&2; exit 1; }; \
+    chmod 0755 /out-crossplane-core; \
+    \
+    # --- prove each artifact is the half we think it is ---
+    # These are real discriminators, not smoke tests: only the CLI has
+    # `version --client`, and only the core has `internal render`. Swapping the
+    # two URLs would otherwise ship an image whose preview fails at runtime.
+    /out-crossplane version --client; \
+    /out-crossplane-core internal render --help >/dev/null
 
 # ---------- Runtime ----------
 FROM gcr.io/distroless/static-debian12:nonroot
@@ -85,8 +103,8 @@ WORKDIR /
 COPY --from=build /out/app-wizard /app-wizard
 # The renderer resolves "crossplane" (driver) and "crossplane-core" (engine) through
 # $PATH; distroless sets PATH to /usr/local/bin:/usr/bin:/bin, so these land on it.
-COPY --from=crossplane-cli /out-crossplane /usr/local/bin/crossplane
-COPY --from=crossplane-core /out-crossplane-core /usr/local/bin/crossplane-core
+COPY --from=crossplane-bins /out-crossplane /usr/local/bin/crossplane
+COPY --from=crossplane-bins /out-crossplane-core /usr/local/bin/crossplane-core
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/app-wizard"]
