@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/utils";
+import { CheckIcon } from "./ui/icons";
 
 // Terminal-style YAML viewer with lightweight, zero-dependency syntax
 // highlighting. The block is intentionally dark in BOTH light and dark page
@@ -111,12 +112,18 @@ export function YamlBlock({
   testId?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  // Cleared on unmount: the render preview mounts one of these per resource and
+  // they come and go with each Preview click, so a dangling timer would set
+  // state on an unmounted block.
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(resetTimer.current), []);
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(yaml);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => setCopied(false), 1500);
     } catch {
       /* clipboard unavailable (non-secure context) — no-op */
     }
@@ -140,9 +147,21 @@ export function YamlBlock({
           <button
             type="button"
             onClick={copy}
-            className="ml-auto rounded px-1.5 py-0.5 font-mono text-[10px] text-[#8b949e] transition-colors hover:bg-white/10 hover:text-[#c9d1d9]"
+            aria-label={copied ? "Copied" : "Copy YAML"}
+            // The label is 10px type, but the control gets a real 40px-tall hit
+            // area via the ::after overlay — without changing the chrome's height.
+            className={cn(
+              "relative ml-auto rounded px-1.5 py-0.5 font-mono text-[10px] text-[#8b949e]",
+              "after:absolute after:inset-x-0 after:top-1/2 after:h-10 after:-translate-y-1/2 after:content-['']",
+              "transition-colors duration-150 ease-out hover:bg-white/10 hover:text-[#c9d1d9]",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#8b949e]",
+            )}
           >
-            {copied ? "copied ✓" : "copy"}
+            {/* Motion is never the only signal: the word changes too. */}
+            <span className="flex items-center gap-1">
+              {copied ? <CheckIcon className="h-3 w-3" strokeWidth={2.5} /> : null}
+              {copied ? "copied" : "copy"}
+            </span>
           </button>
         )}
       </div>

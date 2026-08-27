@@ -94,7 +94,7 @@ export function App() {
             )}
             <div>
               <h1 className="text-lg font-semibold leading-tight">{branding.title}</h1>
-              <p className="text-xs text-brand-navy-fg/70">
+              <p className="text-pretty text-xs text-brand-navy-fg/70">
                 Declare an application and open a GitOps pull request — no YAML by hand.
               </p>
             </div>
@@ -144,10 +144,19 @@ export function App() {
 
       {auth === "authed" && schema && user && (
         <div className="space-y-4">
-          {/* Segmented control: Create app (default) vs My apps (inventory). */}
-          <div className="inline-flex rounded-md border border-border p-0.5">
+          {/* Segmented control: Create app (default) vs My apps (inventory).
+              rounded-lg (8px) outside p-0.5 (2px) around rounded-md (6px)
+              children — the track's radius accounts for its own padding, so the
+              selected segment's corners run parallel to the track's. */}
+          <div
+            role="tablist"
+            aria-label="View"
+            className="inline-flex gap-0.5 rounded-lg border border-border p-0.5"
+          >
             <Button
               type="button"
+              role="tab"
+              aria-selected={view === "create" && !editing}
               size="sm"
               variant={view === "create" && !editing ? "default" : "ghost"}
               onClick={openCreate}
@@ -156,6 +165,8 @@ export function App() {
             </Button>
             <Button
               type="button"
+              role="tab"
+              aria-selected={view === "list" || !!editing}
               size="sm"
               variant={view === "list" || editing ? "default" : "ghost"}
               onClick={openList}
@@ -165,7 +176,9 @@ export function App() {
           </div>
 
           {loadingApp && (
-            <p className="text-sm text-muted-foreground">Loading app…</p>
+            <p role="status" className="text-sm text-muted-foreground">
+              Loading app…
+            </p>
           )}
 
           {editing ? (
@@ -185,7 +198,9 @@ export function App() {
       )}
 
       {auth === "authed" && !schema && !error && (
-        <p className="text-sm text-muted-foreground">Loading schema…</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading schema…
+        </p>
       )}
       </main>
     </div>

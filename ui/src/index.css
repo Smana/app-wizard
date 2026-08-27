@@ -44,6 +44,27 @@
   /* Brand navy header/dark surfaces */
   --brand-navy: #002538;
   --brand-navy-foreground: #f2f2f2;
+
+  /* Placeholder text. Was a hardcoded slate-400, which ignored the theme and
+     read as a light-grey smudge on the dark navy surface. */
+  --placeholder: #8a8a8a;
+
+  /* Elevation. A card's outline exists to lift it off the page, not to divide
+     anything — so it's a layered transparent shadow rather than a solid border:
+     transparency adapts to whatever surface ends up underneath, a border colour
+     doesn't. Structural borders (dividers, inputs, focus/selected states) stay
+     borders. Pure black at low alpha on purpose — a tinted neutral picks up the
+     surface colour and reads as grime along the edge. */
+  --shadow-border:
+    0 0 0 1px rgb(0 0 0 / 0.06),
+    0 1px 2px -1px rgb(0 0 0 / 0.06),
+    0 2px 4px 0 rgb(0 0 0 / 0.04);
+  --shadow-border-hover:
+    0 0 0 1px rgb(0 0 0 / 0.08),
+    0 1px 2px -1px rgb(0 0 0 / 0.08),
+    0 2px 4px 0 rgb(0 0 0 / 0.06);
+  /* Subtle 1px ring on images so avatars and logos have a consistent edge. */
+  --image-outline: rgb(0 0 0 / 0.1);
 }
 
 .dark {
@@ -80,10 +101,62 @@
 
   --brand-navy: #002538;
   --brand-navy-foreground: #f2f2f2;
+
+  --placeholder: #7f93a1;
+
+  /* Layered depth shadows are invisible against navy — collapse to the ring. */
+  --shadow-border: 0 0 0 1px rgb(255 255 255 / 0.08);
+  --shadow-border-hover: 0 0 0 1px rgb(255 255 255 / 0.13);
+  --image-outline: rgb(255 255 255 / 0.1);
+}
+
+html {
+  /* macOS renders text heavier than intended; other platforms ignore this. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   @apply bg-muted text-foreground;
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Headings balance across lines; body text avoids a one-word last line. Both are
+   free at these lengths and stop the form's help text from ending in orphans. */
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
+}
+
+p,
+li,
+legend,
+label {
+  text-wrap: pretty;
+}
+
+/* Any number that changes while you look at it gets equal-width digits, so the
+   layout doesn't twitch as it updates (field counts, resource counts, ports). */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Images carry a hairline edge so avatars and logos sit on the surface instead
+   of bleeding into it. */
+img {
+  outline: 1px solid var(--image-outline);
+  outline-offset: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
