@@ -1,6 +1,6 @@
 // Pure helpers that turn a SchemaPayload into an ordered, tiered field layout
 // and provide immutable get/set on the nested spec object by dot/array path.
-import type { FieldHint, GroupHint, SchemaPayload, Tier } from "../api/types";
+import type { CELRule, FieldHint, GroupHint, SchemaPayload, Tier } from "../api/types";
 import { asSchema, type JSONSchema } from "./jsonSchema";
 
 export interface TopField {
@@ -194,53 +194,84 @@ export function prune(value: unknown): unknown {
   return value;
 }
 
-// Single source of truth for which top-level spec keys are valid for a given
-// workload type, mirroring the App XRD CEL rules:
-//   - route/gateway/service : web only
-//   - autoscaling/pdb       : not for cron
-//   - schedule/cron         : cron only
-// Both the form (hide the field) and clearInvalidForType (strip the stale value)
-// derive from this predicate so the two never drift apart.
-export function fieldVisibleForType(key: string, type: string): boolean {
-  switch (key) {
-    case "route":
-    case "gateway":
-    case "service":
-      return type === "web";
-    case "autoscaling":
-    case "pdb":
-      return type !== "cron";
-    case "schedule":
-    case "cron":
-      return type === "cron";
-    default:
-      return true;
-  }
+// --- Workload-type gating, derived from the XRD's own CEL rules ------------
+//
+// Some top-level fields only apply to certain workload types ("route is only
+// valid when type is 'web'"). That knowledge belongs to the XRD, which states it
+// as x-kubernetes-validations — and the backend already ships those rules in the
+// schema payload. This used to be a hand-written table of key→type mirroring
+// them, which is a drift hazard by construction: the XRD lives in a different
+// repository, so the table silently went stale (it hid `service` and `cron` for
+// non-web workloads even though no rule ever restricted them, and
+// clearInvalidForType then DELETED what the user had typed there).
+//
+// So parse the gate out of the rules instead. Two shapes cover what an XRD
+// writes, both guarded by `!has(self.<key>)`:
+//
+//   !has(self.route) || … || self.type == 'web'    → route is web-only
+//   !has(self.pdb)   || … || self.type != 'cron'   → pdb is anything-but-cron
+//
+// Anything unrecognised leaves the field ungated — fail OPEN on purpose. An
+// over-permissive form shows a field the backend then rejects with a readable
+// CEL message; an over-restrictive one silently discards the user's input, which
+// is the failure this replaced.
+export interface TypeGate {
+  allow: Set<string>;
+  deny: Set<string>;
 }
 
-// The top-level keys gated by workload type — the full set clearInvalidForType
-// iterates to decide what to strip. Keep in sync with fieldVisibleForType.
-const TYPE_GATED_KEYS = [
-  "route",
-  "gateway",
-  "service",
-  "autoscaling",
-  "pdb",
-  "schedule",
-  "cron",
-] as const;
+const GUARDED_KEY = /!has\(self\.([A-Za-z0-9_]+)\)/;
+const TYPE_EQ = /self\.type\s*==\s*'([^']+)'/g;
+const TYPE_NE = /self\.type\s*!=\s*'([^']+)'/g;
+
+export function typeGatesFromCEL(rules: CELRule[]): Map<string, TypeGate> {
+  const gates = new Map<string, TypeGate>();
+  for (const { rule } of rules) {
+    if (!rule || !rule.includes("self.type")) continue;
+
+    // The gated field is whatever the rule guards with `!has(...)` first. A rule
+    // that guards `self.type` itself is a requirement ("schedule is required
+    // when type is 'cron'"), not a visibility gate — skip it.
+    const key = GUARDED_KEY.exec(rule)?.[1];
+    if (!key || key === "type") continue;
+
+    const gate = gates.get(key) ?? { allow: new Set<string>(), deny: new Set<string>() };
+    for (const m of rule.matchAll(TYPE_EQ)) gate.allow.add(m[1]);
+    for (const m of rule.matchAll(TYPE_NE)) gate.deny.add(m[1]);
+    if (gate.allow.size > 0 || gate.deny.size > 0) gates.set(key, gate);
+  }
+  return gates;
+}
+
+// Whether a top-level key applies to `type`. Both the form (hide the field) and
+// clearInvalidForType (strip the stale value) go through here, so the two can
+// never disagree.
+export function fieldVisibleForType(
+  key: string,
+  type: string,
+  gates: Map<string, TypeGate>,
+): boolean {
+  const gate = gates.get(key);
+  if (!gate) return true;
+  if (gate.deny.has(type)) return false;
+  if (gate.allow.size > 0 && !gate.allow.has(type)) return false;
+  return true;
+}
 
 // Clear now-invalid top-level spec keys when the workload type changes. This
 // prevents a hidden field from leaving a stale value that trips CEL validation
-// and blocks the PR. A key is removed when it's present but not valid for the
-// new type (per fieldVisibleForType).
+// and blocks the PR.
 //
 // CRITICAL: returns the SAME object reference when nothing needs deleting, so the
 // caller's effect + setSpec can't loop forever. We check key presence first and
 // only rebuild when a key is actually present.
-export function clearInvalidForType(spec: unknown, type: string): unknown {
-  const present = TYPE_GATED_KEYS.filter(
-    (k) => !fieldVisibleForType(k, type) && getAt(spec, [k]) !== undefined,
+export function clearInvalidForType(
+  spec: unknown,
+  type: string,
+  gates: Map<string, TypeGate>,
+): unknown {
+  const present = [...gates.keys()].filter(
+    (k) => !fieldVisibleForType(k, type, gates) && getAt(spec, [k]) !== undefined,
   );
   if (present.length === 0) return spec; // no-op: preserve reference (no render loop)
 
