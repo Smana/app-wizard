@@ -2,28 +2,93 @@
 # are shown (tier, group, label, help, order) — never field knowledge, which the
 # wizard reads from the XRD. A field absent here defaults to the "advanced" tier
 # and is never hidden.
+#
+# DRIFT GUARD: every key under `fields` must resolve to a property in
+# examples/xrd.yaml. TestUIHintsNoDriftFromXRD (internal/schema/drift_test.go)
+# fails the build otherwise, so this overlay can never outlive the schema it
+# describes.
 groups:
+  - id: workload
+    label: Workload
+    tier: basic
+    order: 10
   - id: exposure
     label: Networking & exposure
+    tier: basic
+    order: 20
+  - id: scaling
+    label: Scaling & resources
     tier: advanced
-    order: 10
+    order: 30
+  - id: config
+    label: Configuration & secrets
+    tier: advanced
+    order: 40
 
 fields:
   image:
     tier: basic
+    group: workload
     label: Image
     order: 1
     example: ghcr.io/acme/api:1.2.3
-  port:
+  type:
     tier: basic
-    label: Port
+    group: workload
+    label: Workload type
+    help: web serves traffic, worker runs continuously, cron runs on a schedule.
     order: 2
   replicas:
     tier: basic
+    group: workload
     label: Replicas
     order: 3
+  schedule:
+    tier: basic
+    group: workload
+    label: Cron schedule
+    example: "0 3 * * *"
+    order: 4
+
+  service:
+    tier: basic
+    group: exposure
+    label: Service
+    order: 1
   route:
-    tier: advanced
+    tier: basic
     group: exposure
     label: HTTP route
+    order: 2
+
+  autoscaling:
+    tier: advanced
+    group: scaling
+    label: Autoscaling
     order: 1
+  resources:
+    tier: advanced
+    group: scaling
+    label: CPU & memory
+    order: 2
+
+  env:
+    tier: advanced
+    group: config
+    label: Environment variables
+    order: 1
+  externalSecrets:
+    tier: advanced
+    group: config
+    label: Secret references
+    order: 2
+  configs:
+    tier: advanced
+    group: config
+    label: Mounted config files
+    order: 3
+  labels:
+    tier: expert
+    group: config
+    label: Extra labels
+    order: 4

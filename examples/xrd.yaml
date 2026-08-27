@@ -5,6 +5,14 @@
 #
 # Cut at v1beta1 on purpose: the wizard derives the claim apiVersion from the
 # XRD, so the served version is whatever you declare.
+#
+# This file is ALSO the fixture the Go schema tests run against
+# (internal/schema/convert_test.go, drift_test.go). It therefore exercises every
+# converter feature the wizard relies on — enum, default, minimum/maximum,
+# pattern, additionalProperties maps, and x-kubernetes-validations — plus the
+# handful of field names the SPA references by hand (see TestLoadBearingUIKeys-
+# Exist). Keep it that way: a field removed here silently un-tests a converter
+# path.
 apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:
@@ -28,6 +36,12 @@ spec:
               required:
                 - image
               properties:
+                type:
+                  type: string
+                  description: Workload shape. Drives which fields apply.
+                  enum: ["web", "worker", "cron"]
+                  default: web
+
                 image:
                   type: object
                   description: Container image to run.
@@ -41,17 +55,33 @@ spec:
                       type: string
                       description: Image tag.
                       default: latest
-                port:
-                  type: integer
-                  description: Container port to expose via the Service.
-                  minimum: 1
-                  maximum: 65535
-                  default: 8080
+                    pullPolicy:
+                      type: string
+                      description: When to pull the image.
+                      enum: ["Always", "IfNotPresent", "Never"]
+                      default: IfNotPresent
+
                 replicas:
                   type: integer
                   description: Replica count.
                   minimum: 1
                   default: 1
+
+                schedule:
+                  type: string
+                  description: Cron schedule (only valid when type is 'cron').
+
+                service:
+                  type: object
+                  description: In-cluster Service.
+                  properties:
+                    port:
+                      type: integer
+                      description: Container port to expose via the Service.
+                      minimum: 1
+                      maximum: 65535
+                      default: 8080
+
                 route:
                   type: object
                   description: External HTTP exposure.
@@ -63,6 +93,122 @@ spec:
                     hostname:
                       type: string
                       description: Hostname (required when the route is enabled).
+                    internetFacing:
+                      type: boolean
+                      description: Serve on the public internet rather than privately.
+                      default: false
+
+                autoscaling:
+                  type: object
+                  description: Horizontal autoscaling.
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: false
+                    minReplicas:
+                      type: integer
+                      minimum: 1
+                      default: 1
+                    maxReplicas:
+                      type: integer
+                      minimum: 1
+                      default: 5
+                    targetCPUUtilizationPercentage:
+                      type: integer
+                      description: Scale out above this average CPU utilisation.
+                      minimum: 1
+                      maximum: 100
+                      default: 80
+
+                resources:
+                  type: object
+                  description: Compute resources.
+                  properties:
+                    requests:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                          description: CPU request, e.g. 100m.
+                          pattern: "^([0-9]+m|[0-9]+(\\.[0-9]+)?)$"
+                        memory:
+                          type: string
+                          description: Memory request, e.g. 128Mi.
+                          pattern: "^[0-9]+(Ki|Mi|Gi)$"
+                    limits:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                          pattern: "^([0-9]+m|[0-9]+(\\.[0-9]+)?)$"
+                        memory:
+                          type: string
+                          pattern: "^[0-9]+(Ki|Mi|Gi)$"
+
+                env:
+                  type: array
+                  description: Non-sensitive literal environment variables.
+                  items:
+                    type: object
+                    required:
+                      - name
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: string
+
+                externalSecrets:
+                  type: array
+                  description: >-
+                    References to secrets in the platform's secret store. Values
+                    are never stored here — the secrets operator injects them at
+                    runtime.
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - remoteRef
+                    properties:
+                      name:
+                        type: string
+                        description: Name of the generated Secret.
+                      remoteRef:
+                        type: string
+                        description: Path to the secret in the platform's secret store.
+
+                configs:
+                  type: object
+                  description: Configuration files to mount into the container.
+                  additionalProperties:
+                    type: object
+                    required:
+                      - path
+                      - content
+                    properties:
+                      path:
+                        type: string
+                        description: Path the file is mounted at.
+                      content:
+                        type: string
+                        description: File content.
+
+                labels:
+                  type: object
+                  description: Extra labels applied to the workload.
+                  additionalProperties:
+                    type: string
+
               x-kubernetes-validations:
                 - rule: "!has(self.route) || !self.route.enabled || has(self.route.hostname)"
-                  message: route.hostname is required when route.enabled is true
+                  message: route.hostname is required when route is enabled
+                - rule: "!has(self.autoscaling) || !self.autoscaling.enabled || self.autoscaling.minReplicas <= self.autoscaling.maxReplicas"
+                  message: autoscaling.minReplicas must be <= maxReplicas
+                - rule: "!has(self.type) || self.type != 'cron' || has(self.schedule)"
+                  message: schedule is required when type is 'cron'
+                - rule: "!has(self.schedule) || (has(self.type) && self.type == 'cron')"
+                  message: schedule is only valid when type is 'cron'
+                - rule: "!has(self.route) || !self.route.enabled || !has(self.type) || self.type == 'web'"
+                  message: route is only valid when type is 'web'
+                - rule: "!has(self.autoscaling) || !self.autoscaling.enabled || !has(self.type) || self.type != 'cron'"
+                  message: autoscaling is not valid when type is 'cron'

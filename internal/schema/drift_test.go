@@ -40,9 +40,9 @@ func TestUIHintsNoDriftFromXRD(t *testing.T) {
 		t.Fatalf("convert XRD: %v", err)
 	}
 	root := repoRoot(t)
-	hb, err := os.ReadFile(filepath.Join(root, filepath.FromSlash("container-images/app-wizard/ui-hints.yaml")))
+	hb, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(uiHintsPath)))
 	if err != nil {
-		t.Fatalf("read ui-hints.yaml: %v", err)
+		t.Fatalf("read %s: %v", uiHintsPath, err)
 	}
 	var hints api.UIHints
 	if err := yaml.Unmarshal(hb, &hints); err != nil {
