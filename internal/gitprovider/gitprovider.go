@@ -12,6 +12,17 @@ import (
 // ErrNotFound is returned by ReadFile when a path does not exist.
 var ErrNotFound = errors.New("gitprovider: file not found")
 
+// ErrUnauthorized is returned when the provider rejects the caller's
+// credentials — a token that has expired, been revoked, or was issued by an
+// OAuth app that no longer exists.
+//
+// It is deliberately distinct from a transport failure. A rejected token is not
+// a broken upstream: the session is simply stale and the cure is to sign in
+// again, which callers can only offer if they can tell the two apart. Wrapped
+// with %w so errors.Is works across providers; the concrete API error stays in
+// the chain for logging.
+var ErrUnauthorized = errors.New("gitprovider: credentials rejected")
+
 // File is a path/content pair to commit. When Delete is true the path is
 // removed in the commit and Content is ignored (Phase 2 decommission flow).
 type File struct {

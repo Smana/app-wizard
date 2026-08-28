@@ -5,6 +5,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -156,6 +157,24 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := provider.CurrentUser(r.Context())
 	if err != nil {
+		// A rejected token is a stale session, not a broken upstream. Returning
+		// 502 here left the UI on "Something went wrong / failed to fetch user"
+		// with no way forward: the cookie is signed by SESSION_KEY, which
+		// outlives the cluster, so a session from a previous OAuth app or a
+		// previous cluster decrypts perfectly and carries a token GitHub no
+		// longer honours. Observed on gcp-0, 2026-08-28.
+		//
+		// Drop the session and answer 401 so the client offers a sign-in.
+		if errors.Is(err, gitprovider.ErrUnauthorized) {
+			a.clearSession(w, r)
+			a.logger.Warn("session token rejected by the provider; session cleared")
+			a.writeError(w, http.StatusUnauthorized, "not authenticated")
+			return
+		}
+		// Anything else IS a gateway failure, and it used to vanish silently --
+		// this handler logged nothing at all, so the 502 was undiagnosable from
+		// the pod logs. Never log the error's body; the message is enough.
+		a.logger.Warn("failed to fetch user", "err", err)
 		a.writeError(w, http.StatusBadGateway, "failed to fetch user")
 		return
 	}
@@ -165,11 +184,18 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 
 // Logout clears the session.
 func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
+	a.clearSession(w, r)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// clearSession expires the session cookie. Shared by Logout and by Me when the
+// provider rejects the stored token, so a stale session is dropped by the same
+// code path a deliberate sign-out uses.
+func (a *Auth) clearSession(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.store.Get(r, sessionName)
 	sess.Options.MaxAge = -1
 	sess.Values = map[any]any{}
 	_ = sess.Save(r, w)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // Token returns the session's GitHub token, if present.

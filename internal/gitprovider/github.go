@@ -3,6 +3,7 @@ package gitprovider
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/google/go-github/v89/github"
 )
@@ -163,8 +164,16 @@ func (g *GitHub) CommentPR(ctx context.Context, number int, body string) error {
 }
 
 func (g *GitHub) CurrentUser(ctx context.Context) (User, error) {
-	u, _, err := g.client.Users.Get(ctx, "")
+	u, resp, err := g.client.Users.Get(ctx, "")
 	if err != nil {
+		// A 401 means the token is stale, not that GitHub is unwell. Callers
+		// need that distinction to offer a re-login instead of reporting an
+		// upstream failure the user can do nothing about. 403 is deliberately
+		// NOT folded in here: that is a live token lacking a scope, which
+		// signing in again will not fix.
+		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
+			return User{}, fmt.Errorf("%w: %v", ErrUnauthorized, err)
+		}
 		return User{}, err
 	}
 	return User{Login: u.GetLogin(), AvatarURL: u.GetAvatarURL(), Name: u.GetName()}, nil

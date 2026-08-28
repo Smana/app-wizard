@@ -14,6 +14,12 @@ type FakeProvider struct {
 
 	User User
 
+	// CurrentUserErr, when set, is returned by CurrentUser instead of User.
+	// Exists so callers can be tested against a provider that rejects the
+	// credentials (ErrUnauthorized) as distinct from one that is unreachable —
+	// a distinction the HTTP layer turns into 401-and-sign-in versus 502.
+	CurrentUserErr error
+
 	// Files is the seeded/committed content keyed by "<ref>:<path>". The
 	// base branch content is also readable from any branch created off it.
 	Files map[string][]byte
@@ -145,6 +151,9 @@ func (f *FakeProvider) CommentPR(_ context.Context, number int, body string) err
 func (f *FakeProvider) CurrentUser(_ context.Context) (User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.CurrentUserErr != nil {
+		return User{}, f.CurrentUserErr
+	}
 	return f.User, nil
 }
 
