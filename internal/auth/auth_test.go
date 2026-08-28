@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -72,5 +73,67 @@ func TestDevModeBypass(t *testing.T) {
 	}
 	if p != dev {
 		t.Fatalf("dev bypass: expected the dev provider")
+	}
+}
+
+// newTestAuthWithProviderErr builds github-mode Auth whose factory yields a
+// provider failing CurrentUser with err.
+func newTestAuthWithProviderErr(err error) *Auth {
+	return New(Config{
+		ClientID:    "gh-client",
+		RedirectURL: "http://localhost:8080/api/auth/callback",
+		SessionKey:  []byte("0123456789abcdef0123456789abcdef"), // pragma: allowlist secret
+		Factory: func(ctx context.Context, token string) (gitprovider.Provider, error) {
+			return &gitprovider.FakeProvider{CurrentUserErr: err}, nil
+		},
+	})
+}
+
+// TestMeStaleSessionClears covers the case that left the UI stuck on
+// "failed to fetch user" with no way forward: the cookie is signed by
+// SESSION_KEY, which outlives the cluster, so a session issued by a previous
+// OAuth app decrypts perfectly and carries a token GitHub no longer honours.
+//
+// That must read as "sign in again" (401 + cookie dropped), not as a broken
+// upstream (502), because only one of those is actionable by the user.
+func TestMeStaleSessionClears(t *testing.T) {
+	a := newTestAuthWithProviderErr(fmt.Errorf("%w: 401", gitprovider.ErrUnauthorized))
+	req := seedAuthToken(t, a, "stale-token")
+	rec := httptest.NewRecorder()
+
+	a.Me(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	// The stale cookie must be expired, or every reload repeats the failure.
+	var cleared bool
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sessionName && c.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatalf("session cookie was not expired; cookies=%v", rec.Result().Cookies())
+	}
+}
+
+// TestMeUpstreamFailureStays502 is the other half: an error that is NOT a
+// credential rejection must remain a gateway failure, and must NOT drop the
+// user's session. Signing in again cannot fix GitHub being unreachable.
+func TestMeUpstreamFailureStays502(t *testing.T) {
+	a := newTestAuthWithProviderErr(errors.New("dial tcp: connection refused"))
+	req := seedAuthToken(t, a, "good-token")
+	rec := httptest.NewRecorder()
+
+	a.Me(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sessionName && c.MaxAge < 0 {
+			t.Fatal("session was cleared on a transport failure; re-login cannot fix that")
+		}
 	}
 }
