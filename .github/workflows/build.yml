@@ -3,6 +3,9 @@ name: Build image
 on:
   push:
     branches: [main]
+    # Release tags. The semver image tag is derived from the git tag pushed here
+    # and nowhere else — see the tag policy on the metadata step below.
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -33,25 +36,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Application version (Dockerfile ARG)
-        id: appver
-        run: |
-          # The image's own version, published as an immutable semver tag.
-          V=$(grep -oP 'ARG APP_WIZARD_VERSION=\K[^\s]+' Dockerfile | head -1 || echo "")
-          echo "version=${V}" >> "$GITHUB_OUTPUT"
-
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          # Tag policy. One rule matters: a semver tag is produced ONLY by a git
+          # tag push, so it can never point at anything but the commit that was
+          # tagged.
+          #
+          # It used to come from `ARG APP_WIZARD_VERSION` in the Dockerfile, which
+          # every main build re-published. Forgetting to bump that ARG therefore
+          # REASSIGNED the semver tag to a newer image — v0.1.0 silently moved
+          # from the July build to the August one that way. A tag that looks
+          # immutable and is not is worse than no tag at all.
+          #
+          #   branch push  -> main-<sha>            immutable, what deployments pin
+          #   tag push v*  -> v1.2.3, v1.2, latest  the release
+          #   pull request -> pr-<n>                built, never pushed
           tags: |
             type=ref,event=pr
-            # <branch>-<sha> is what deployments pin to; {{branch}} is only set on
-            # push/dispatch, so gate it off pull_request (else it renders "-<sha>").
-            type=sha,prefix={{branch}}-,enable=${{ github.event_name != 'pull_request' }}
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.appver.outputs.version }},enable=${{ steps.appver.outputs.version != '' }}
+            # {{branch}} is empty on a tag ref, which would render a bare "-<sha>",
+            # so this is restricted to branch pushes rather than "not a PR".
+            type=sha,prefix={{branch}}-,enable=${{ startsWith(github.ref, 'refs/heads/') }}
+            # `v` prefix kept: it matches the git tags and the existing published
+            # tags. {{version}} strips it, hence the explicit prefix.
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            # `latest` follows the newest RELEASE, not the newest main build — a
+            # quickstart that pulls latest should get a version that was tagged
+            # on purpose.
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Build and push
         id: build
