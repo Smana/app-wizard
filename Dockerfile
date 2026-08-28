@@ -6,8 +6,6 @@
 # Stage 3: fetch the crossplane CLI + core engine (the render preview needs both).
 # Stage 4: distroless runtime, non-root.
 
-ARG APP_WIZARD_VERSION=v0.2.0
-
 # The render preview runs `crossplane render` as a subprocess
 # (internal/render/crossplane.go: Binary defaults to "crossplane"), so the CLI has to
 # be IN the image — distroless ships nothing but what we copy. Without it the preview
