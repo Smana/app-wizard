@@ -146,6 +146,10 @@ var AllowedLinkPlaceholders = map[string]bool{"namespace": true, "name": true, "
 
 var linkPlaceholder = regexp.MustCompile(`\{([^{}]*)\}`)
 
+// allowedPlaceholders erases the valid tokens so the residual-brace check can
+// see what is left over.
+var allowedPlaceholders = strings.NewReplacer("{namespace}", "", "{name}", "", "{stack}", "")
+
 // validateLinks fails closed on the first bad entry, naming its index so the
 // operator can find it in wizard.yaml.
 func validateLinks(links []Link) error {
@@ -164,6 +168,14 @@ func validateLinks(links []Link) error {
 			if !AllowedLinkPlaceholders[m[1]] {
 				return fmt.Errorf("links[%d] (%s): unknown placeholder {%s} — allowed: {namespace}, {name}, {stack}", i, l.Label, m[1])
 			}
+		}
+		// A brace that survives removing the allowed placeholders is a typo the
+		// scan above cannot see: it only matches well-formed pairs, so `{name`,
+		// `name}` and `{{name}}` all slip past it. Catching them here is what
+		// makes the promise on these tests true — a malformed placeholder fails
+		// at startup, not on click.
+		if stripped := allowedPlaceholders.Replace(l.URL); strings.ContainsAny(stripped, "{}") {
+			return fmt.Errorf("links[%d] (%s): url %q has an unbalanced or malformed placeholder — allowed: {namespace}, {name}, {stack}", i, l.Label, l.URL)
 		}
 	}
 	return nil

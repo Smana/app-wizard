@@ -223,11 +223,15 @@ func TestLoad_LinksAbsentIsEmpty(t *testing.T) {
 func TestLoad_LinksRejected(t *testing.T) {
 	base := "repo:\n  owner: acme\n  name: platform\nschema:\n  xrdPath: xrds/app.yaml\nrender:\n  enabled: false\n"
 	cases := map[string]struct{ links, want string }{
-		"unknown placeholder": {"links:\n  - label: X\n    url: https://x.example/{cluster}/{name}\n", `{cluster}`},
-		"relative url":        {"links:\n  - label: X\n    url: /apps/{name}\n", "absolute http"},
-		"bad scheme":          {"links:\n  - label: X\n    url: ftp://x.example/{name}\n", "absolute http"},
-		"empty label":         {"links:\n  - label: \"\"\n    url: https://x.example/{name}\n", "label"},
-		"empty url":           {"links:\n  - label: X\n    url: \"\"\n", "url"},
+		"unknown placeholder":   {"links:\n  - label: X\n    url: https://x.example/{cluster}/{name}\n", `{cluster}`},
+		"relative url":          {"links:\n  - label: X\n    url: /apps/{name}\n", "absolute http"},
+		"bad scheme":            {"links:\n  - label: X\n    url: ftp://x.example/{name}\n", "absolute http"},
+		"empty label":           {"links:\n  - label: \"\"\n    url: https://x.example/{name}\n", "label"},
+		"empty url":             {"links:\n  - label: X\n    url: \"\"\n", "url"},
+		"missing closing brace": {"links:\n  - label: X\n    url: https://x.example/{name\n", "unbalanced"},
+		"missing opening brace": {"links:\n  - label: X\n    url: https://x.example/name}\n", "unbalanced"},
+		"doubled braces":        {"links:\n  - label: X\n    url: https://x.example/{{name}}\n", "unbalanced"},
+		"empty placeholder":     {"links:\n  - label: X\n    url: https://x.example/{}\n", "{}"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
