@@ -1,5 +1,5 @@
 // Package appstore reads the App claim inventory from the GitOps repo via a
-// gitprovider (SPEC-008 Phase 2, T201/T202). It walks apps/<stack>/*/app.yaml
+// gitprovider (SPEC-008 Phase 2, T201/T202). It walks <layout stack dir>/*/app.yaml
 // for every stack in the registry and exposes a single app for editing.
 package appstore
 
@@ -12,6 +12,7 @@ import (
 
 	"github.com/Smana/app-wizard/internal/api"
 	"github.com/Smana/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/layout"
 	"sigs.k8s.io/yaml"
 )
 
@@ -25,16 +26,18 @@ type StackLister interface {
 type Store struct {
 	stacks StackLister
 	ref    string // base branch/ref to read from
+	layout string // file-layout template shared with the PR service
 }
 
-// New builds a Store reading from ref (typically the repo base branch).
-func New(stacks StackLister, ref string) *Store {
-	return &Store{stacks: stacks, ref: ref}
+// New builds a Store reading from ref (typically the repo base branch). layout
+// is the same template the PR service writes with ("" means layout.Default).
+func New(stacks StackLister, ref, layout string) *Store {
+	return &Store{stacks: stacks, ref: ref, layout: layout}
 }
 
-// List walks every stack for apps/<stack>/<app>/app.yaml and returns a summary
-// for each. Stacks or apps that can't be read are skipped (best-effort listing);
-// a missing apps/<stack> directory is not an error.
+// List walks every stack for <layout stack dir>/<app>/app.yaml and returns a
+// summary for each. Stacks or apps that can't be read are skipped (best-effort
+// listing); a missing stack directory is not an error.
 func (s *Store) List(ctx context.Context, provider gitprovider.Provider) ([]api.AppSummary, error) {
 	stacks, err := s.stacks.Stacks(ctx)
 	if err != nil {
@@ -43,7 +46,7 @@ func (s *Store) List(ctx context.Context, provider gitprovider.Provider) ([]api.
 
 	var out []api.AppSummary
 	for _, stack := range stacks {
-		prefix := path.Join("apps", stack.Name)
+		prefix := layout.StackDir(s.layout, stack.Name)
 		entries, err := provider.ReadTree(ctx, s.ref, prefix)
 		if err != nil {
 			if err == gitprovider.ErrNotFound {
@@ -56,6 +59,11 @@ func (s *Store) List(ctx context.Context, provider gitprovider.Provider) ([]api.
 				continue
 			}
 			appName := path.Base(e.Path)
+			// Round-trip guard: only directories the layout would produce for
+			// this name are apps. Anything else under the stack dir is noise.
+			if layout.Expand(s.layout, stack.Name, appName) != e.Path {
+				continue
+			}
 			appPath := path.Join(e.Path, "app.yaml")
 			content, _, err := provider.ReadFile(ctx, s.ref, appPath)
 			if err != nil {
@@ -82,7 +90,7 @@ func (s *Store) List(ctx context.Context, provider gitprovider.Provider) ([]api.
 // Get loads a single app for editing. Returns gitprovider.ErrNotFound when the
 // app.yaml is absent.
 func (s *Store) Get(ctx context.Context, provider gitprovider.Provider, stack, name string) (api.AppDetail, error) {
-	appPath := path.Join("apps", stack, name, "app.yaml")
+	appPath := path.Join(layout.Expand(s.layout, stack, name), "app.yaml")
 	content, _, err := provider.ReadFile(ctx, s.ref, appPath)
 	if err != nil {
 		return api.AppDetail{}, err

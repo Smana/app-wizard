@@ -72,7 +72,7 @@ func main() {
 	validator := validate.NewValidator(pipeline)
 	renderer := render.NewCrossplaneRenderer(cfg.RepoRoot, cfg.CompositionPath, cfg.FunctionsPath, cfg.EnvConfigPath, cfg.FunctionsDevTargets)
 	prService := pr.NewService(validator, renderer, pipeline, cfg.RepoBaseBranch, cfg.Layout, cfg.RenderEnabled)
-	appStore := appstore.New(pipeline, cfg.RepoBaseBranch)
+	appStore := appstore.New(pipeline, cfg.RepoBaseBranch, cfg.Layout)
 
 	// LLM assists (Phase 3, FR-011). Available when an API key or a base URL
 	// (keyless gateway) is set; otherwise a no-op backend keeps the form working.

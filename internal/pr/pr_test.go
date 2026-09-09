@@ -268,19 +268,6 @@ func TestCreateRenderDisabled(t *testing.T) {
 	}
 }
 
-func TestExpandLayout(t *testing.T) {
-	cases := []struct{ layout, want string }{
-		{"apps/{stack}/{app}", "apps/team-a/myapp"},
-		{"workloads/{app}", "workloads/myapp"},
-		{"{stack}/apps/{app}", "team-a/apps/myapp"},
-	}
-	for _, tc := range cases {
-		if got := expandLayout(tc.layout, "team-a", "myapp"); got != tc.want {
-			t.Errorf("expandLayout(%q) = %q, want %q", tc.layout, got, tc.want)
-		}
-	}
-}
-
 func contains(arr []string, want string) bool {
 	for _, s := range arr {
 		if s == want {

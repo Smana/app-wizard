@@ -14,6 +14,7 @@ import (
 
 	"github.com/Smana/app-wizard/internal/api"
 	"github.com/Smana/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/layout"
 	"github.com/Smana/app-wizard/internal/render"
 )
 
@@ -101,18 +102,12 @@ func (s *Service) Create(ctx context.Context, provider gitprovider.Provider, req
 // directory itself (its basename is the entry added to the parent kustomization).
 // The default template "apps/{stack}/{app}" reproduces the historical layout.
 func (s *Service) appPaths(stack, app string) (appPath, kustPath, parentKustPath, appDir string) {
-	appDir = expandLayout(s.layout, stack, app)
+	appDir = layout.Expand(s.layout, stack, app)
 	parentDir := path.Dir(appDir)
 	return path.Join(appDir, "app.yaml"),
 		path.Join(appDir, "kustomization.yaml"),
 		path.Join(parentDir, "kustomization.yaml"),
 		appDir
-}
-
-// expandLayout substitutes {stack}/{app} in the layout template. Convention: the
-// last path segment is the app directory (its basename registers in the parent).
-func expandLayout(layout, stack, app string) string {
-	return path.Clean(strings.NewReplacer("{stack}", stack, "{app}", app).Replace(layout))
 }
 
 // render runs the crossplane render gate, or returns nil resources when render

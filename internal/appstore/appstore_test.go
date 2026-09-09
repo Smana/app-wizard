@@ -42,7 +42,7 @@ spec:
 	// A directory with no app.yaml must be ignored.
 	fp.Seed("main", "apps/team-a/not-an-app/README.md", []byte("noise"))
 
-	store := New(fakeStacks{stacks: []api.Stack{{Name: "team-a", Namespace: "apps-team-a"}}}, "main")
+	store := New(fakeStacks{stacks: []api.Stack{{Name: "team-a", Namespace: "apps-team-a"}}}, "main", "")
 	got, err := store.List(context.Background(), fp)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -81,7 +81,7 @@ spec:
 
 func TestListSkipsStackWithoutAppsDir(t *testing.T) {
 	fp := gitprovider.NewFakeProvider()
-	store := New(fakeStacks{stacks: []api.Stack{{Name: "empty", Namespace: "apps-empty"}}}, "main")
+	store := New(fakeStacks{stacks: []api.Stack{{Name: "empty", Namespace: "apps-empty"}}}, "main", "")
 	got, err := store.List(context.Background(), fp)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -105,7 +105,7 @@ spec:
 `)
 	fp.Seed("main", "apps/team-a/myapp/app.yaml", raw)
 
-	store := New(fakeStacks{}, "main")
+	store := New(fakeStacks{}, "main", "")
 	detail, err := store.Get(context.Background(), fp, "team-a", "myapp")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
@@ -124,9 +124,52 @@ spec:
 
 func TestGetAppNotFound(t *testing.T) {
 	fp := gitprovider.NewFakeProvider()
-	store := New(fakeStacks{}, "main")
+	store := New(fakeStacks{}, "main", "")
 	_, err := store.Get(context.Background(), fp, "team-a", "ghost")
 	if err != gitprovider.ErrNotFound {
 		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+// The inventory must read from wherever the PR service writes. With a custom
+// layout the old code listed "apps/<stack>" and found nothing.
+func TestListHonoursLayout(t *testing.T) {
+	fp := gitprovider.NewFakeProvider()
+	fp.Seed("main", "tenants/team-a/apps/web-app/app.yaml", []byte(`apiVersion: example.com/v1beta1
+kind: App
+metadata:
+  name: web-app
+spec:
+  image:
+    repository: ghcr.io/acme/web
+`))
+	// Same app under the default layout must NOT be picked up: only the
+	// configured layout is the source of truth.
+	fp.Seed("main", "apps/team-a/stale/app.yaml", []byte("kind: App\nmetadata:\n  name: stale\n"))
+
+	store := New(fakeStacks{stacks: []api.Stack{{Name: "team-a", Namespace: "apps-team-a"}}}, "main", "tenants/{stack}/apps/{app}")
+	got, err := store.List(context.Background(), fp)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "web-app" || got[0].Namespace != "apps-team-a" {
+		t.Fatalf("got %+v, want exactly web-app in apps-team-a", got)
+	}
+}
+
+func TestGetHonoursLayout(t *testing.T) {
+	fp := gitprovider.NewFakeProvider()
+	fp.Seed("main", "tenants/team-a/apps/myapp/app.yaml", []byte("kind: App\nspec:\n  replicas: 2\n"))
+
+	store := New(fakeStacks{}, "main", "tenants/{stack}/apps/{app}")
+	detail, err := store.Get(context.Background(), fp, "team-a", "myapp")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if detail.Spec["replicas"] != float64(2) {
+		t.Errorf("spec not loaded from the layout path: %+v", detail.Spec)
+	}
+	if _, err := New(fakeStacks{}, "main", "").Get(context.Background(), fp, "team-a", "myapp"); err != gitprovider.ErrNotFound {
+		t.Errorf("default layout must not find an app stored under the custom one, got %v", err)
 	}
 }
