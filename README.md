@@ -92,6 +92,30 @@ docker run --rm -p 8080:8080 \
   ghcr.io/smana/app-wizard:latest
 ```
 
+### Exercising the whole loop, without a cluster
+
+`make dev` runs with dev auth and a local git provider, which means the wizard
+writes what would have been a pull request straight into the working tree. That
+is enough to walk the whole feature end to end, offline:
+
+1. **Create an app.** Open <http://localhost:8080>, fill the form (the `demo`
+   stack is bundled), and submit. In dev mode the generated `app.yaml` and
+   `kustomization.yaml` land under `apps/demo/<name>/` instead of becoming a PR.
+2. **See it listed.** Switch to **My apps**. The app appears as a card with its
+   stack, namespace, type and image.
+3. **Give the card somewhere to go.** Uncomment the `links` block in
+   [`examples/wizard.yaml`](examples/wizard.yaml) and restart. Each card gains an
+   **Open** action carrying the expanded URL — a single link renders as a button,
+   two or more as a menu. Nothing is contacted; the browser only builds the URL.
+4. **Prove the validation.** Break a placeholder on purpose — `{nmespace}`, or
+   drop a closing brace — and the wizard refuses to start, naming the entry. A
+   link typo is meant to fail here rather than surface as a dead link later.
+5. **Clean up.** `rm -rf apps/` and revert `examples/wizard.yaml`; the throwaway
+   app is untracked, not ignored.
+
+Decommissioning from a card writes the deletion the same way, so the removal
+path is walkable offline too.
+
 ## Configuration
 
 Non-secret configuration lives in **`wizard.yaml`** (repo coordinates, XRD/stacks
