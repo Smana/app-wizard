@@ -12,8 +12,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
@@ -104,10 +106,7 @@ type Config struct {
 	// "claude-opus-5").
 	LLMModel string
 
-	// --- Agnostic-deployment knobs (SPEC-009). Introduced by the config-file
-	// layer (T005); the behaviour that consumes them lands in later tasks:
-	// Layout → T007, RenderEnabled → T009, Branding* → T008. Defaults reproduce
-	// today's behaviour so they are inert until wired. ---
+	// --- Agnostic-deployment knobs (SPEC-009). ---
 
 	// Layout is the PR file-layout template for a new app directory. Tokens
 	// {stack} and {app} expand to the chosen stack and app name (LAYOUT).
@@ -120,12 +119,54 @@ type Config struct {
 	BrandingTitle   string
 	BrandingLogoURL string
 	BrandingTheme   map[string]string
+
+	// Links are operator-defined external links rendered on each app card
+	// (file-only, `links:` in wizard.yaml). URL is a template over
+	// {namespace}, {name} and {stack}; the SPA expands it per app. The wizard
+	// holds no cluster credentials — a link is the only bridge to a live view.
+	Links []Link
 }
 
 // AssistsAvailable reports whether LLM assists are configured: either an API
 // key or a base URL (keyless gateway) is set.
 func (c *Config) AssistsAvailable() bool {
 	return c.LLMAPIKey != "" || c.LLMBaseURL != ""
+}
+
+// Link is one external link shown on every app card. URL may contain the
+// placeholders in AllowedLinkPlaceholders; nothing else is substituted.
+type Link struct {
+	Label string
+	URL   string
+}
+
+// AllowedLinkPlaceholders are the only {tokens} a link URL may use. They are
+// exactly what the inventory knows about an app without touching a cluster.
+var AllowedLinkPlaceholders = map[string]bool{"namespace": true, "name": true, "stack": true}
+
+var linkPlaceholder = regexp.MustCompile(`\{([^{}]*)\}`)
+
+// validateLinks fails closed on the first bad entry, naming its index so the
+// operator can find it in wizard.yaml.
+func validateLinks(links []Link) error {
+	for i, l := range links {
+		if strings.TrimSpace(l.Label) == "" {
+			return fmt.Errorf("links[%d]: label must not be empty", i)
+		}
+		if strings.TrimSpace(l.URL) == "" {
+			return fmt.Errorf("links[%d] (%s): url must not be empty", i, l.Label)
+		}
+		u, err := url.Parse(l.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("links[%d] (%s): url %q must be an absolute http(s) URL", i, l.Label, l.URL)
+		}
+		for _, m := range linkPlaceholder.FindAllStringSubmatch(l.URL, -1) {
+			if !AllowedLinkPlaceholders[m[1]] {
+				return fmt.Errorf("links[%d] (%s): unknown placeholder {%s} — allowed: {namespace}, {name}, {stack}", i, l.Label, m[1])
+			}
+		}
+	}
+	return nil
 }
 
 // Load resolves configuration with precedence defaults → wizard.yaml → env
@@ -168,6 +209,7 @@ func Load() (*Config, error) {
 		BrandingTitle:       pick("BRAND_TITLE", fc.Branding.Title, "App Wizard"),
 		BrandingLogoURL:     pick("BRAND_LOGO_URL", fc.Branding.LogoURL, ""),
 		BrandingTheme:       fc.Branding.Theme,
+		Links:               fileLinks(fc.Links),
 	}
 
 	if cfg.XRDSource != SourceLocal && cfg.XRDSource != SourceGitHub {
@@ -179,6 +221,10 @@ func Load() (*Config, error) {
 	// not at PR time).
 	if !strings.Contains(cfg.Layout, "{app}") {
 		return nil, fmt.Errorf("layout %q must contain the {app} token", cfg.Layout)
+	}
+
+	if err := validateLinks(cfg.Links); err != nil {
+		return nil, fmt.Errorf("invalid links in config: %w", err)
 	}
 
 	if err := requireDeploymentConfig(cfg); err != nil {
@@ -243,6 +289,18 @@ func requireDeploymentConfig(cfg *Config) error {
 	return nil
 }
 
+// fileLinks copies the file's link entries into the typed Config field.
+func fileLinks(in []struct {
+	Label string `yaml:"label"`
+	URL   string `yaml:"url"`
+}) []Link {
+	out := make([]Link, 0, len(in))
+	for _, l := range in {
+		out = append(out, Link{Label: l.Label, URL: l.URL})
+	}
+	return out
+}
+
 // pick returns the first non-empty of: env[key], fileVal, def. This is how the
 // defaults → file → env precedence is applied per string field.
 func pick(key, fileVal, def string) string {
@@ -294,6 +352,10 @@ type fileConfig struct {
 		LogoURL string            `yaml:"logoUrl"`
 		Theme   map[string]string `yaml:"theme"`
 	} `yaml:"branding"`
+	Links []struct {
+		Label string `yaml:"label"`
+		URL   string `yaml:"url"`
+	} `yaml:"links"`
 	Assists struct {
 		Model   string `yaml:"model"`
 		BaseURL string `yaml:"baseUrl"`

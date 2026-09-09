@@ -179,3 +179,69 @@ func TestLoad_ExplicitMissingFileErrors(t *testing.T) {
 		t.Fatalf("expected error for missing explicit config, got nil")
 	}
 }
+
+// links: file-only list of {label,url}; url is a template over {namespace},
+// {name}, {stack}. Validated at load so a typo fails at startup, not on click.
+func TestLoad_Links(t *testing.T) {
+	writeConfig(t, `
+repo:
+  owner: acme
+  name: platform
+schema:
+  xrdPath: xrds/app.yaml
+render:
+  enabled: false
+links:
+  - label: Headlamp (aws-0)
+    url: https://headlamp.example/c/main/apps/{namespace}/{name}
+  - label: Runbook
+    url: https://wiki.example/{stack}/{name}
+`)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Links) != 2 {
+		t.Fatalf("Links = %+v, want 2", cfg.Links)
+	}
+	if cfg.Links[0].Label != "Headlamp (aws-0)" || cfg.Links[0].URL != "https://headlamp.example/c/main/apps/{namespace}/{name}" {
+		t.Errorf("Links[0] = %+v", cfg.Links[0])
+	}
+}
+
+func TestLoad_LinksAbsentIsEmpty(t *testing.T) {
+	writeConfig(t, "repo:\n  owner: acme\n  name: platform\nschema:\n  xrdPath: xrds/app.yaml\nrender:\n  enabled: false\n")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Links) != 0 {
+		t.Errorf("Links = %+v, want none", cfg.Links)
+	}
+}
+
+func TestLoad_LinksRejected(t *testing.T) {
+	base := "repo:\n  owner: acme\n  name: platform\nschema:\n  xrdPath: xrds/app.yaml\nrender:\n  enabled: false\n"
+	cases := map[string]struct{ links, want string }{
+		"unknown placeholder": {"links:\n  - label: X\n    url: https://x.example/{cluster}/{name}\n", `{cluster}`},
+		"relative url":        {"links:\n  - label: X\n    url: /apps/{name}\n", "absolute http"},
+		"bad scheme":          {"links:\n  - label: X\n    url: ftp://x.example/{name}\n", "absolute http"},
+		"empty label":         {"links:\n  - label: \"\"\n    url: https://x.example/{name}\n", "label"},
+		"empty url":           {"links:\n  - label: X\n    url: \"\"\n", "url"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			writeConfig(t, base+tc.links)
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load succeeded, want an error mentioning %q", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not mention %q", err, tc.want)
+			}
+			if !strings.Contains(err.Error(), "links[0]") {
+				t.Errorf("error %q does not name the entry", err)
+			}
+		})
+	}
+}
