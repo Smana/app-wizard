@@ -29,10 +29,11 @@ type Store struct {
 	layout string // file-layout template shared with the PR service
 }
 
-// New builds a Store reading from ref (typically the repo base branch). layout
-// is the same template the PR service writes with ("" means layout.Default).
-func New(stacks StackLister, ref, layout string) *Store {
-	return &Store{stacks: stacks, ref: ref, layout: layout}
+// New builds a Store reading from ref (typically the repo base branch).
+// layoutTmpl is the same template the PR service writes with ("" means
+// layout.Default).
+func New(stacks StackLister, ref, layoutTmpl string) *Store {
+	return &Store{stacks: stacks, ref: ref, layout: layoutTmpl}
 }
 
 // List walks every stack for <layout stack dir>/<app>/app.yaml and returns a

@@ -171,6 +171,24 @@ func TestLoad_UnknownKeyRejected(t *testing.T) {
 	}
 }
 
+// TestLoad_StacklessLayoutRejected: a layout with no {stack} token makes the
+// per-stack inventory walk read the same directory for every stack, filing one
+// app under N stacks (see internal/layout.Validate). Load must fail closed and
+// name the missing token, not let it reach a running wizard.
+func TestLoad_StacklessLayoutRejected(t *testing.T) {
+	t.Setenv("WIZARD_CONFIG", "")
+	t.Setenv("REPO_OWNER", "acme")
+	t.Setenv("REPO_NAME", "gitops")
+	t.Setenv("XRD_PATH", "xrds/app.yaml")
+	t.Setenv("RENDER_ENABLED", "false")
+	t.Setenv("LAYOUT", "workloads/{app}")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "{stack}") {
+		t.Fatalf("expected an error naming the missing {stack} token, got %v", err)
+	}
+}
+
 // TestLoad_ExplicitMissingFileErrors: an explicitly-set WIZARD_CONFIG that does
 // not exist is an error, not a silent fallback to defaults.
 func TestLoad_ExplicitMissingFileErrors(t *testing.T) {

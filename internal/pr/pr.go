@@ -49,15 +49,13 @@ type Service struct {
 	renderEnabled bool
 }
 
-// NewService builds the PR service. layout is the file-layout template for a new
-// app directory ({stack}/{app} tokens); empty falls back to "apps/{stack}/{app}".
-// renderEnabled gates the crossplane render gate + PR comment (FR-005): when
-// false, validate + PR still run, only the render preview/comment are omitted.
-func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch, layout string, renderEnabled bool) *Service {
-	if layout == "" {
-		layout = "apps/{stack}/{app}"
-	}
-	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch, layout: layout, renderEnabled: renderEnabled}
+// NewService builds the PR service. layoutTmpl is the file-layout template for
+// a new app directory ({stack}/{app} tokens); empty falls back to
+// layout.Default via layout.Expand. renderEnabled gates the crossplane render
+// gate + PR comment (FR-005): when false, validate + PR still run, only the
+// render preview/comment are omitted.
+func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch, layoutTmpl string, renderEnabled bool) *Service {
+	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch, layout: layoutTmpl, renderEnabled: renderEnabled}
 }
 
 // Create runs the requested operation (create/update/delete) and, on success,

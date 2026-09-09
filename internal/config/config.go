@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Smana/app-wizard/internal/layout"
 	yaml "go.yaml.in/yaml/v3"
 )
 
@@ -174,11 +175,12 @@ func Load() (*Config, error) {
 		cfg.XRDSource = SourceLocal
 	}
 
-	// The layout template MUST contain {app}; without it every app in a stack
-	// resolves to the same path and silently overwrites (fail fast at load,
-	// not at PR time).
-	if !strings.Contains(cfg.Layout, "{app}") {
-		return nil, fmt.Errorf("layout %q must contain the {app} token", cfg.Layout)
+	// The layout template must be usable by both the writer (pr.Service) and
+	// the reader (appstore.Store), or the wizard silently writes apps its own
+	// inventory can't find (or attributes to the wrong stack) — see
+	// layout.Validate for the two rules and the shapes that broke each one.
+	if err := layout.Validate(cfg.Layout); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
 	}
 
 	if err := requireDeploymentConfig(cfg); err != nil {
