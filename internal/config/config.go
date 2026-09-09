@@ -186,7 +186,7 @@ func validateLinks(links []Link) error {
 		// makes the promise on these tests true — a malformed placeholder fails
 		// at startup, not on click.
 		if stripped := allowedPlaceholders.Replace(l.URL); strings.ContainsAny(stripped, "{}") {
-			return fmt.Errorf("links[%d] (%s): url %q has an unbalanced or malformed placeholder — allowed: {namespace}, {name}, {stack}", i, l.Label, l.URL)
+			return fmt.Errorf("links[%d] (%s): url %q has an unbalanced or malformed placeholder — allowed: {namespace}, {name}, {stack}; a literal brace must be percent-encoded (%%7B / %%7D), since bare {}/{ are only read as a placeholder", i, l.Label, l.URL)
 		}
 	}
 	return nil

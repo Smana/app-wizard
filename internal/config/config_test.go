@@ -222,19 +222,27 @@ func TestLoad_LinksAbsentIsEmpty(t *testing.T) {
 
 func TestLoad_LinksRejected(t *testing.T) {
 	base := "repo:\n  owner: acme\n  name: platform\nschema:\n  xrdPath: xrds/app.yaml\nrender:\n  enabled: false\n"
-	cases := map[string]struct{ links, want string }{
-		"unknown placeholder":     {"links:\n  - label: X\n    url: https://x.example/{cluster}/{name}\n", `{cluster}`},
-		"relative url":            {"links:\n  - label: X\n    url: /apps/{name}\n", "absolute http"},
-		"bad scheme":              {"links:\n  - label: X\n    url: ftp://x.example/{name}\n", "absolute http"},
-		"empty label":             {"links:\n  - label: \"\"\n    url: https://x.example/{name}\n", "label"},
-		"empty url":               {"links:\n  - label: X\n    url: \"\"\n", "url"},
-		"missing closing brace":   {"links:\n  - label: X\n    url: https://x.example/{name\n", "unbalanced"},
-		"missing opening brace":   {"links:\n  - label: X\n    url: https://x.example/name}\n", "unbalanced"},
-		"doubled braces":          {"links:\n  - label: X\n    url: https://x.example/{{name}}\n", "unbalanced"},
-		"empty placeholder":       {"links:\n  - label: X\n    url: https://x.example/{}\n", "{}"},
-		"placeholder in host":     {"links:\n  - label: X\n    url: https://headlamp.{stack}.example/apps/{name}\n", "scheme, host, or port"},
-		"placeholder in userinfo": {"links:\n  - label: X\n    url: https://{name}@x.example/a\n", "scheme, host, or port"},
-		"placeholder in port":     {"links:\n  - label: X\n    url: https://x.example:{name}/a\n", "scheme, host, or port"},
+	// idx is the "links[N]" the error must name; empty means "links[0]" — the
+	// default for every case whose offending entry is the only (first) one.
+	cases := map[string]struct{ links, want, idx string }{
+		"unknown placeholder":                  {"links:\n  - label: X\n    url: https://x.example/{cluster}/{name}\n", `{cluster}`, ""},
+		"relative url":                         {"links:\n  - label: X\n    url: /apps/{name}\n", "absolute http", ""},
+		"bad scheme":                           {"links:\n  - label: X\n    url: ftp://x.example/{name}\n", "absolute http", ""},
+		"empty label":                          {"links:\n  - label: \"\"\n    url: https://x.example/{name}\n", "label", ""},
+		"empty url":                            {"links:\n  - label: X\n    url: \"\"\n", "url", ""},
+		"missing closing brace":                {"links:\n  - label: X\n    url: https://x.example/{name\n", "unbalanced", ""},
+		"missing opening brace":                {"links:\n  - label: X\n    url: https://x.example/name}\n", "unbalanced", ""},
+		"doubled braces":                       {"links:\n  - label: X\n    url: https://x.example/{{name}}\n", "unbalanced", ""},
+		"empty placeholder":                    {"links:\n  - label: X\n    url: https://x.example/{}\n", "{}", ""},
+		"placeholder in host":                  {"links:\n  - label: X\n    url: https://headlamp.{stack}.example/apps/{name}\n", "scheme, host, or port", ""},
+		"placeholder in userinfo":              {"links:\n  - label: X\n    url: https://{name}@x.example/a\n", "scheme, host, or port", ""},
+		"placeholder in port":                  {"links:\n  - label: X\n    url: https://x.example:{name}/a\n", "scheme, host, or port", ""},
+		"literal brace needs percent-encoding": {"links:\n  - label: X\n    url: https://x.example/{name}}\n", "percent-encode", ""},
+		"offending entry is not first": {
+			"links:\n  - label: Good\n    url: https://x.example/{name}\n  - label: X\n    url: ftp://x.example/{name}\n",
+			"absolute http",
+			"links[1]",
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -246,8 +254,12 @@ func TestLoad_LinksRejected(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error %q does not mention %q", err, tc.want)
 			}
-			if !strings.Contains(err.Error(), "links[0]") {
-				t.Errorf("error %q does not name the entry", err)
+			wantIdx := tc.idx
+			if wantIdx == "" {
+				wantIdx = "links[0]"
+			}
+			if !strings.Contains(err.Error(), wantIdx) {
+				t.Errorf("error %q does not name the entry %q", err, wantIdx)
 			}
 		})
 	}

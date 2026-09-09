@@ -21,4 +21,8 @@ describe("expandLink", () => {
   it("leaves a template with no placeholders untouched", () => {
     expect(expandLink("https://x/static", app)).toBe("https://x/static");
   });
+
+  it("leaves an unknown placeholder verbatim rather than guessing at it", () => {
+    expect(expandLink("https://x/{cluster}/{name}", app)).toBe("https://x/{cluster}/podinfo");
+  });
 });

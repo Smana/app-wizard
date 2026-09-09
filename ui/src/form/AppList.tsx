@@ -45,7 +45,7 @@ function OpenAction({ app, links }: { app: AppSummary; links: Link[] }) {
       </summary>
       <ul className="absolute right-0 z-10 mt-1 min-w-48 rounded-md border border-border bg-card p-1 shadow-border">
         {links.map((l) => (
-          <li key={l.label}>
+          <li key={`${l.label}-${l.url}`}>
             <a
               className="block rounded px-3 py-2 text-sm hover:bg-muted"
               href={expandLink(l.url, app)}

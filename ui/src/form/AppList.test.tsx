@@ -61,4 +61,20 @@ describe("AppList", () => {
     expect(items[1].getAttribute("href")).toBe("https://wiki.example/dev/cinema");
     expect(screen.queryByTestId("app-open")).toBeNull();
   });
+
+  it("keys duplicate-label menu items uniquely, with no React duplicate-key warning", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const runbookA = { label: "Runbook", url: "https://wiki.example/a/{name}" };
+    const runbookB = { label: "Runbook", url: "https://wiki.example/b/{name}" };
+    await renderCards([runbookA, runbookB]);
+    const menus = screen.getAllByTestId("app-open-menu");
+    fireEvent.click(menus[0].querySelector("summary")!);
+    const items = menus[0].querySelectorAll("a");
+    expect(items).toHaveLength(2);
+    expect(items[0].getAttribute("href")).toBe("https://wiki.example/a/cinema");
+    expect(items[1].getAttribute("href")).toBe("https://wiki.example/b/cinema");
+    const keyWarnings = errorSpy.mock.calls.filter((args) => String(args[0]).includes("same key"));
+    expect(keyWarnings).toHaveLength(0);
+    errorSpy.mockRestore();
+  });
 });
