@@ -104,6 +104,12 @@ See [`examples/wizard.yaml`](examples/wizard.yaml) for a complete, commented
 example, and [`docs/configuration.md`](docs/configuration.md) for the full
 key-by-key reference (every `wizard.yaml` key, its env override, and its default).
 
+Each app in the **My apps** inventory can carry operator-configured links — for
+example to a dashboard showing that app running on a cluster. They are URL
+templates over the app's namespace, name and stack, set under `links` in
+`wizard.yaml`; the wizard expands them in the browser and never contacts a
+cluster itself.
+
 The claim `apiVersion`/`kind` are **not** configured — they are read from the
 XRD (`spec.group` + served version + `claimNames.kind`/`names.kind`), so pointing
 `schema.xrdPath` at your XRD is all it takes.

@@ -55,10 +55,26 @@ override (env wins).
 | `branding.title` | `BRAND_TITLE` | `App Wizard` | App title (header + document title) |
 | `branding.logoUrl` | `BRAND_LOGO_URL` | — | Header logo URL (no logo when unset) |
 | `branding.theme` | — (file-only) | — | CSS custom properties applied to `:root` (keys map to the wizard's `--var` names) |
+| `links` | — (file-only) | — | List of `{label, url}` shown on every card of "My apps". `url` is a template over `{namespace}`, `{name}`, `{stack}`, expanded per app and opened in a new tab. Must be absolute `http(s)`; an unknown or malformed placeholder fails startup |
 | `assists.model` | `LLM_MODEL` | `claude-opus-5` | Assist model id |
 | `assists.baseUrl` | `LLM_BASE_URL` | — | Anthropic-compatible endpoint (also marks assists available) |
 | `auth.mode` | `AUTH_MODE` | `github` | `github` (OAuth) or `dev` (local bypass) |
 | `auth.redirectUrl` | `OAUTH_REDIRECT_URL` | `http://localhost:8080/api/auth/callback` | OAuth callback |
+
+Example — one entry per cluster when the same stacks deploy to several:
+
+```yaml
+links:
+  - label: Headlamp (aws-0)
+    url: https://headlamp.priv.aws.example/c/main/apps/{namespace}/{name}
+  - label: Headlamp (gcp-0)
+    url: https://headlamp.priv.gcp.example/c/main/apps/{namespace}/{name}
+```
+
+One entry renders as a button on each card; several render as a menu; none
+leaves the cards as they were. The wizard never contacts a cluster — the link
+is the whole bridge to a live view, built from the app's own namespace, name
+and stack.
 
 Other environment-only knobs: `LISTEN_ADDR` (default `:8080`), `REPO_ROOT`
 (on-disk repo root the local source and renderer read from), `XRD_SOURCE`
