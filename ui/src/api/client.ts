@@ -93,6 +93,7 @@ export function getBranding(): Promise<Branding> {
     title: "App Wizard",
     logoUrl: "",
     theme: {},
+    links: [],
   }));
 }
 
