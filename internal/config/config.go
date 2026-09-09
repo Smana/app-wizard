@@ -161,7 +161,18 @@ func validateLinks(links []Link) error {
 			return fmt.Errorf("links[%d] (%s): url must not be empty", i, l.Label)
 		}
 		u, err := url.Parse(l.URL)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		if err != nil {
+			// A "{" here almost always means the operator tried to template the
+			// authority (host/userinfo/port) — url.Parse rejects "{" there, so
+			// the URL is well-formed apart from that. Say so specifically: the
+			// generic "must be absolute" message is technically true but
+			// misleading, since the URL already is absolute and https.
+			if strings.Contains(l.URL, "{") {
+				return fmt.Errorf("links[%d] (%s): url %q has a placeholder in the scheme, host, or port — a placeholder is only usable in the path, query, or fragment, since its value is URL-encoded when expanded and that would not protect a host", i, l.Label, l.URL)
+			}
+			return fmt.Errorf("links[%d] (%s): url %q must be an absolute http(s) URL", i, l.Label, l.URL)
+		}
+		if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return fmt.Errorf("links[%d] (%s): url %q must be an absolute http(s) URL", i, l.Label, l.URL)
 		}
 		for _, m := range linkPlaceholder.FindAllStringSubmatch(l.URL, -1) {

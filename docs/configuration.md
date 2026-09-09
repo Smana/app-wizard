@@ -71,6 +71,10 @@ links:
     url: https://headlamp.priv.gcp.example/c/main/apps/{namespace}/{name}
 ```
 
+Placeholders only expand in the path, query or fragment, never in the scheme,
+host or port — so per-cluster is one literal-hostname entry per cluster, as
+above, not a single URL with `{stack}` templated into the hostname.
+
 One entry renders as a button on each card; several render as a menu; none
 leaves the cards as they were. The wizard never contacts a cluster — the link
 is the whole bridge to a live view, built from the app's own namespace, name
