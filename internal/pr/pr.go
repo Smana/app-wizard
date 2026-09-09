@@ -261,7 +261,7 @@ func (s *Service) delete(ctx context.Context, provider gitprovider.Provider, req
 	branch := branchName("remove", req.Stack, req.AppName)
 	commitMsg := fmt.Sprintf("chore(apps): remove %s from %s", req.AppName, req.Stack)
 	title := fmt.Sprintf("chore(apps): remove %s from %s", req.AppName, req.Stack)
-	return s.commitAndPR(ctx, provider, branch, files, commitMsg, title, removalBody(req, stack), nil)
+	return s.commitAndPR(ctx, provider, branch, files, commitMsg, title, removalBody(req, stack, appDir), nil)
 }
 
 // commitAndPR creates the branch, commits files, opens the PR, and (when
@@ -315,12 +315,12 @@ func prBody(req api.PRRequest, stack api.Stack) string {
 	return sb.String()
 }
 
-func removalBody(req api.PRRequest, stack api.Stack) string {
+func removalBody(req api.PRRequest, stack api.Stack, appDir string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Remove app: `%s`\n\n", req.AppName)
 	fmt.Fprintf(&sb, "Decommission requested via the App Wizard.\n\n")
 	fmt.Fprintf(&sb, "- **Stack**: `%s` (namespace `%s`, owner `%s`)\n", stack.Name, stack.Namespace, stack.OwnerTeam)
-	fmt.Fprintf(&sb, "\nThis PR deletes `apps/%s/%s/` and removes its registration from the stack kustomization.\n", req.Stack, req.AppName)
+	fmt.Fprintf(&sb, "\nThis PR deletes `%s/` and removes its registration from the stack kustomization.\n", appDir)
 	if req.Description != "" {
 		fmt.Fprintf(&sb, "\n%s\n", req.Description)
 	}

@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Smana/app-wizard/internal/api"
 	"github.com/Smana/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/render"
 	"sigs.k8s.io/yaml"
 )
 
@@ -193,6 +195,34 @@ func TestUnknownMode(t *testing.T) {
 	}
 	if _, ok := err.(*GateError); !ok {
 		t.Errorf("expected *GateError, got %T", err)
+	}
+}
+
+// The body of a removal PR is what a reviewer reads before approving a
+// deletion. It must name the directory the commit actually removes.
+func TestDeleteModeBodyNamesLayoutDir(t *testing.T) {
+	v := fakeValidator{resp: api.ValidateResponse{Valid: true}}
+	s := NewService(v, &render.FakeRenderer{}, fakeStacks{}, "main", "tenants/{stack}/apps/{app}", false)
+	fp := gitprovider.NewFakeProvider()
+	fp.Seed("main", "tenants/team-a/apps/myapp/app.yaml", []byte("kind: App\n"))
+	fp.Seed("main", "tenants/team-a/apps/myapp/kustomization.yaml", []byte("kind: Kustomization\n"))
+	fp.Seed("main", "tenants/team-a/apps/kustomization.yaml",
+		[]byte("apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n- ./myapp\n"))
+
+	req := newReq()
+	req.Mode = "delete"
+	if _, err := s.Create(context.Background(), fp, req); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if len(fp.PRs) != 1 {
+		t.Fatalf("expected 1 PR, got %d", len(fp.PRs))
+	}
+	body := fp.PRs[0].Body
+	if !strings.Contains(body, "`tenants/team-a/apps/myapp/`") {
+		t.Errorf("body does not name the deleted directory:\n%s", body)
+	}
+	if strings.Contains(body, "apps/team-a/myapp") {
+		t.Errorf("body still names the default layout path:\n%s", body)
 	}
 }
 
