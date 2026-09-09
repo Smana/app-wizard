@@ -157,6 +157,34 @@ spec:
 	}
 }
 
+// A layout is config-legal as soon as it contains "{app}" (see internal/config);
+// it need not put the app name alone at the end of the path. "apps/{stack}/{app}-app"
+// decorates the directory name, so the directory the app actually lives in
+// ("web-app") never round-trips back through Expand("team-a", "web-app") to
+// itself. A guard that skipped anything failing that round-trip used to drop
+// this app from the listing even though it has a perfectly good app.yaml.
+func TestListFindsAppUnderDecoratedLayout(t *testing.T) {
+	fp := gitprovider.NewFakeProvider()
+	fp.Seed("main", "apps/team-a/web-app/app.yaml", []byte(`apiVersion: example.com/v1beta1
+kind: App
+metadata:
+  name: web
+  namespace: apps-team-a
+spec:
+  image:
+    repository: ghcr.io/acme/web
+`))
+
+	store := New(fakeStacks{stacks: []api.Stack{{Name: "team-a", Namespace: "apps-team-a"}}}, "main", "apps/{stack}/{app}-app")
+	got, err := store.List(context.Background(), fp)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "web" || got[0].Namespace != "apps-team-a" {
+		t.Fatalf("got %+v, want exactly one app named web in apps-team-a", got)
+	}
+}
+
 func TestGetHonoursLayout(t *testing.T) {
 	fp := gitprovider.NewFakeProvider()
 	fp.Seed("main", "tenants/team-a/apps/myapp/app.yaml", []byte("kind: App\nspec:\n  replicas: 2\n"))

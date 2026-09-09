@@ -59,11 +59,6 @@ func (s *Store) List(ctx context.Context, provider gitprovider.Provider) ([]api.
 				continue
 			}
 			appName := path.Base(e.Path)
-			// Round-trip guard: only directories the layout would produce for
-			// this name are apps. Anything else under the stack dir is noise.
-			if layout.Expand(s.layout, stack.Name, appName) != e.Path {
-				continue
-			}
 			appPath := path.Join(e.Path, "app.yaml")
 			content, _, err := provider.ReadFile(ctx, s.ref, appPath)
 			if err != nil {
