@@ -188,7 +188,7 @@ export function App() {
               onBack={openList}
             />
           ) : view === "list" ? (
-            <AppList onEdit={onEditApp} />
+            <AppList onEdit={onEditApp} links={branding.links} />
           ) : (
             <WizardForm key="create" schema={schema} user={user} />
           )}
