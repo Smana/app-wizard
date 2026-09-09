@@ -164,7 +164,7 @@ func Load() (*Config, error) {
 		LLMBaseURL:          pick("LLM_BASE_URL", fc.Assists.BaseURL, ""),
 		LLMModel:            pick("LLM_MODEL", fc.Assists.Model, DefaultLLMModel),
 		FunctionsDevTargets: parseKVList(pick("FUNCTIONS_DEV_TARGETS", fc.Render.FunctionsDevTargets, "")),
-		Layout:              pick("LAYOUT", fc.Layout, "apps/{stack}/{app}"),
+		Layout:              pick("LAYOUT", fc.Layout, layout.Default),
 		RenderEnabled:       pickBool("RENDER_ENABLED", fc.Render.Enabled, true),
 		BrandingTitle:       pick("BRAND_TITLE", fc.Branding.Title, "App Wizard"),
 		BrandingLogoURL:     pick("BRAND_LOGO_URL", fc.Branding.LogoURL, ""),

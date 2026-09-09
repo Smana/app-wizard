@@ -16,9 +16,7 @@ const Default = "apps/{stack}/{app}"
 // directory. An empty template means Default. Convention (enforced by the
 // config loader): the last path segment is the app directory.
 func Expand(layout, stack, app string) string {
-	if layout == "" {
-		layout = Default
-	}
+	layout = withDefault(layout)
 	return path.Clean(strings.NewReplacer("{stack}", stack, "{app}", app).Replace(layout))
 }
 
@@ -41,9 +39,7 @@ func StackDir(layout, stack string) string {
 //
 // A decorated last segment is fine: apps/{stack}/{app}-app resolves and lists.
 func Validate(tmpl string) error {
-	if tmpl == "" {
-		tmpl = Default
-	}
+	tmpl = withDefault(tmpl)
 	if !strings.Contains(tmpl, "{stack}") {
 		return fmt.Errorf("layout %q must contain the {stack} token", tmpl)
 	}
@@ -51,4 +47,12 @@ func Validate(tmpl string) error {
 		return fmt.Errorf("layout %q must contain the {app} token in its last path segment", tmpl)
 	}
 	return nil
+}
+
+// withDefault treats an empty template as Default.
+func withDefault(tmpl string) string {
+	if tmpl == "" {
+		return Default
+	}
+	return tmpl
 }
