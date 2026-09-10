@@ -14,6 +14,7 @@ import (
 
 	"github.com/Smana/app-wizard/internal/api"
 	"github.com/Smana/app-wizard/internal/gitprovider"
+	"github.com/Smana/app-wizard/internal/layout"
 	"github.com/Smana/app-wizard/internal/render"
 )
 
@@ -48,15 +49,13 @@ type Service struct {
 	renderEnabled bool
 }
 
-// NewService builds the PR service. layout is the file-layout template for a new
-// app directory ({stack}/{app} tokens); empty falls back to "apps/{stack}/{app}".
-// renderEnabled gates the crossplane render gate + PR comment (FR-005): when
-// false, validate + PR still run, only the render preview/comment are omitted.
-func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch, layout string, renderEnabled bool) *Service {
-	if layout == "" {
-		layout = "apps/{stack}/{app}"
-	}
-	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch, layout: layout, renderEnabled: renderEnabled}
+// NewService builds the PR service. layoutTmpl is the file-layout template for
+// a new app directory ({stack}/{app} tokens); empty falls back to
+// layout.Default via layout.Expand. renderEnabled gates the crossplane render
+// gate + PR comment (FR-005): when false, validate + PR still run, only the
+// render preview/comment are omitted.
+func NewService(validator Validator, renderer render.Renderer, stacks StackResolver, baseBranch, layoutTmpl string, renderEnabled bool) *Service {
+	return &Service{validator: validator, renderer: renderer, stacks: stacks, baseBranch: baseBranch, layout: layoutTmpl, renderEnabled: renderEnabled}
 }
 
 // Create runs the requested operation (create/update/delete) and, on success,
@@ -101,18 +100,12 @@ func (s *Service) Create(ctx context.Context, provider gitprovider.Provider, req
 // directory itself (its basename is the entry added to the parent kustomization).
 // The default template "apps/{stack}/{app}" reproduces the historical layout.
 func (s *Service) appPaths(stack, app string) (appPath, kustPath, parentKustPath, appDir string) {
-	appDir = expandLayout(s.layout, stack, app)
+	appDir = layout.Expand(s.layout, stack, app)
 	parentDir := path.Dir(appDir)
 	return path.Join(appDir, "app.yaml"),
 		path.Join(appDir, "kustomization.yaml"),
 		path.Join(parentDir, "kustomization.yaml"),
 		appDir
-}
-
-// expandLayout substitutes {stack}/{app} in the layout template. Convention: the
-// last path segment is the app directory (its basename registers in the parent).
-func expandLayout(layout, stack, app string) string {
-	return path.Clean(strings.NewReplacer("{stack}", stack, "{app}", app).Replace(layout))
 }
 
 // render runs the crossplane render gate, or returns nil resources when render
@@ -266,7 +259,7 @@ func (s *Service) delete(ctx context.Context, provider gitprovider.Provider, req
 	branch := branchName("remove", req.Stack, req.AppName)
 	commitMsg := fmt.Sprintf("chore(apps): remove %s from %s", req.AppName, req.Stack)
 	title := fmt.Sprintf("chore(apps): remove %s from %s", req.AppName, req.Stack)
-	return s.commitAndPR(ctx, provider, branch, files, commitMsg, title, removalBody(req, stack), nil)
+	return s.commitAndPR(ctx, provider, branch, files, commitMsg, title, removalBody(req, stack, appDir), nil)
 }
 
 // commitAndPR creates the branch, commits files, opens the PR, and (when
@@ -320,12 +313,12 @@ func prBody(req api.PRRequest, stack api.Stack) string {
 	return sb.String()
 }
 
-func removalBody(req api.PRRequest, stack api.Stack) string {
+func removalBody(req api.PRRequest, stack api.Stack, appDir string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Remove app: `%s`\n\n", req.AppName)
 	fmt.Fprintf(&sb, "Decommission requested via the App Wizard.\n\n")
 	fmt.Fprintf(&sb, "- **Stack**: `%s` (namespace `%s`, owner `%s`)\n", stack.Name, stack.Namespace, stack.OwnerTeam)
-	fmt.Fprintf(&sb, "\nThis PR deletes `apps/%s/%s/` and removes its registration from the stack kustomization.\n", req.Stack, req.AppName)
+	fmt.Fprintf(&sb, "\nThis PR deletes `%s/` and removes its registration from the stack kustomization.\n", appDir)
 	if req.Description != "" {
 		fmt.Fprintf(&sb, "\n%s\n", req.Description)
 	}
