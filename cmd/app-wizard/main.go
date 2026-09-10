@@ -12,13 +12,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Smana/app-wizard/internal/api"
 	"github.com/Smana/app-wizard/internal/appstore"
 	"github.com/Smana/app-wizard/internal/assist"
 	"github.com/Smana/app-wizard/internal/auth"
 	"github.com/Smana/app-wizard/internal/config"
 	"github.com/Smana/app-wizard/internal/gitprovider"
-	"github.com/Smana/app-wizard/internal/httputil"
 	"github.com/Smana/app-wizard/internal/pr"
 	"github.com/Smana/app-wizard/internal/render"
 	"github.com/Smana/app-wizard/internal/schema"
@@ -122,14 +120,8 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	// Branding chrome for the SPA (title/logo/theme) — operator-configurable.
-	mux.HandleFunc("GET /api/branding", func(w http.ResponseWriter, _ *http.Request) {
-		httputil.WriteJSON(w, http.StatusOK, api.Branding{
-			Title:   cfg.BrandingTitle,
-			LogoURL: cfg.BrandingLogoURL,
-			Theme:   cfg.BrandingTheme,
-		})
-	})
+	// Branding chrome for the SPA (title/logo/theme/links) — operator-configurable.
+	mux.HandleFunc("GET /api/branding", brandingHandler(brandingFromConfig(cfg)))
 
 	// Schema / validation / render.
 	mux.Handle("GET /api/schema", pipeline.Handler())

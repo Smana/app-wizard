@@ -21,7 +21,7 @@ export function App() {
   const [auth, setAuth] = useState<AuthState>("loading");
   const [error, setError] = useState<string | null>(null);
   // Neutral default until /api/branding resolves (title from the deployment).
-  const [branding, setBranding] = useState<Branding>({ title: "App Wizard", logoUrl: "", theme: {} });
+  const [branding, setBranding] = useState<Branding>({ title: "App Wizard", logoUrl: "", theme: {}, links: [] });
 
   // Top-level view: create wizard (default) or the day-2 inventory.
   const [view, setView] = useState<View>("create");
@@ -188,7 +188,7 @@ export function App() {
               onBack={openList}
             />
           ) : view === "list" ? (
-            <AppList onEdit={onEditApp} />
+            <AppList onEdit={onEditApp} links={branding.links} />
           ) : (
             <WizardForm key="create" schema={schema} user={user} />
           )}

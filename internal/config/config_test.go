@@ -197,3 +197,88 @@ func TestLoad_ExplicitMissingFileErrors(t *testing.T) {
 		t.Fatalf("expected error for missing explicit config, got nil")
 	}
 }
+
+// links: file-only list of {label,url}; url is a template over {namespace},
+// {name}, {stack}. Validated at load so a typo fails at startup, not on click.
+func TestLoad_Links(t *testing.T) {
+	writeConfig(t, `
+repo:
+  owner: acme
+  name: platform
+schema:
+  xrdPath: xrds/app.yaml
+render:
+  enabled: false
+links:
+  - label: Headlamp (aws-0)
+    url: https://headlamp.example/c/main/apps/{namespace}/{name}
+  - label: Runbook
+    url: https://wiki.example/{stack}/{name}
+`)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Links) != 2 {
+		t.Fatalf("Links = %+v, want 2", cfg.Links)
+	}
+	if cfg.Links[0].Label != "Headlamp (aws-0)" || cfg.Links[0].URL != "https://headlamp.example/c/main/apps/{namespace}/{name}" {
+		t.Errorf("Links[0] = %+v", cfg.Links[0])
+	}
+}
+
+func TestLoad_LinksAbsentIsEmpty(t *testing.T) {
+	writeConfig(t, "repo:\n  owner: acme\n  name: platform\nschema:\n  xrdPath: xrds/app.yaml\nrender:\n  enabled: false\n")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Links) != 0 {
+		t.Errorf("Links = %+v, want none", cfg.Links)
+	}
+}
+
+func TestLoad_LinksRejected(t *testing.T) {
+	base := "repo:\n  owner: acme\n  name: platform\nschema:\n  xrdPath: xrds/app.yaml\nrender:\n  enabled: false\n"
+	// idx is the "links[N]" the error must name; empty means "links[0]" — the
+	// default for every case whose offending entry is the only (first) one.
+	cases := map[string]struct{ links, want, idx string }{
+		"unknown placeholder":                  {"links:\n  - label: X\n    url: https://x.example/{cluster}/{name}\n", `{cluster}`, ""},
+		"relative url":                         {"links:\n  - label: X\n    url: /apps/{name}\n", "absolute http", ""},
+		"bad scheme":                           {"links:\n  - label: X\n    url: ftp://x.example/{name}\n", "absolute http", ""},
+		"empty label":                          {"links:\n  - label: \"\"\n    url: https://x.example/{name}\n", "label", ""},
+		"empty url":                            {"links:\n  - label: X\n    url: \"\"\n", "url", ""},
+		"missing closing brace":                {"links:\n  - label: X\n    url: https://x.example/{name\n", "unbalanced", ""},
+		"missing opening brace":                {"links:\n  - label: X\n    url: https://x.example/name}\n", "unbalanced", ""},
+		"doubled braces":                       {"links:\n  - label: X\n    url: https://x.example/{{name}}\n", "unbalanced", ""},
+		"empty placeholder":                    {"links:\n  - label: X\n    url: https://x.example/{}\n", "{}", ""},
+		"placeholder in host":                  {"links:\n  - label: X\n    url: https://headlamp.{stack}.example/apps/{name}\n", "scheme, host, or port", ""},
+		"placeholder in userinfo":              {"links:\n  - label: X\n    url: https://{name}@x.example/a\n", "scheme, host, or port", ""},
+		"placeholder in port":                  {"links:\n  - label: X\n    url: https://x.example:{name}/a\n", "scheme, host, or port", ""},
+		"literal brace needs percent-encoding": {"links:\n  - label: X\n    url: https://x.example/{name}}\n", "percent-encode", ""},
+		"offending entry is not first": {
+			"links:\n  - label: Good\n    url: https://x.example/{name}\n  - label: X\n    url: ftp://x.example/{name}\n",
+			"absolute http",
+			"links[1]",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			writeConfig(t, base+tc.links)
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load succeeded, want an error mentioning %q", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not mention %q", err, tc.want)
+			}
+			wantIdx := tc.idx
+			if wantIdx == "" {
+				wantIdx = "links[0]"
+			}
+			if !strings.Contains(err.Error(), wantIdx) {
+				t.Errorf("error %q does not name the entry %q", err, wantIdx)
+			}
+		})
+	}
+}

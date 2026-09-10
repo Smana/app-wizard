@@ -40,6 +40,13 @@ branding:
   # theme:
   #   primary: "#0077b8"
 
+# External links shown on each card in "My apps" (optional, file-only). The URL
+# is a template over {namespace}, {name} and {stack}; any other placeholder — or
+# an unbalanced brace — fails at startup rather than breaking a link on click.
+# links:
+#   - label: Headlamp
+#     url: https://headlamp.example/c/main/apps/{namespace}/{name}
+
 # LLM assists (optional). Assists turn ON when LLM_API_KEY (env-only — never in
 # this file) or a baseUrl is set; leaving both unset keeps them off, as here.
 assists:

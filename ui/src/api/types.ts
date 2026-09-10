@@ -17,11 +17,18 @@ export interface GVK {
   kind: string;
 }
 
-// Branding is the SPA chrome (title/logo/theme), configured per deployment.
+// Branding is the SPA chrome (title/logo/theme/links), configured per deployment.
 export interface Branding {
   title: string;
   logoUrl: string;
   theme: Record<string, string>;
+  // External URL templates expanded per app; see form/links.ts.
+  links: Link[];
+}
+
+export interface Link {
+  label: string;
+  url: string;
 }
 
 export interface CELRule {
