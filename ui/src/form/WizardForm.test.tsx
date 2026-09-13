@@ -98,4 +98,27 @@ describe("WizardForm renderer", () => {
     fireEvent.click(screen.getByRole("button", { name: /Describe your app/i }));
     expect(screen.getByRole("button", { name: /Prefill/i })).toBeTruthy();
   });
+
+  // Previewing with no stack selected sends a claim with no namespace, and
+  // `crossplane render` does not default one. The App Composition read
+  // Undefined and died mid-render with "invalid value 'UndefinedType' to load
+  // attribute 'startswith'" — a KCL stack trace in place of the resource list.
+  // The stack is what supplies the namespace, so Preview waits for it.
+  it("keeps Preview disabled until a stack is selected", () => {
+    render(<WizardForm schema={fixtureSchema} user={user} />);
+
+    expect(screen.getByRole("button", { name: /^Preview$/i })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Stack$/i), {
+      target: { value: "dev" },
+    });
+
+    expect(screen.getByRole("button", { name: /^Preview$/i })).toHaveProperty(
+      "disabled",
+      false,
+    );
+  });
 });

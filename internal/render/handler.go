@@ -33,19 +33,26 @@ func Handler(r Renderer, stacks StackResolver, enabled bool) http.HandlerFunc {
 			return
 		}
 
-		namespace := ""
-		if body.Stack != "" {
-			s, ok, err := stacks.Stack(req.Context(), body.Stack)
-			if err != nil {
-				httputil.WriteError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			if !ok {
-				httputil.WriteJSON(w, http.StatusOK, api.RenderPreviewResponse{OK: false, Error: "unknown stack " + body.Stack})
-				return
-			}
-			namespace = s.Namespace
+		// The stack is what supplies the namespace, and a claim without one is
+		// not renderable: `crossplane render` does not default
+		// metadata.namespace the way the API server does, so the Composition
+		// reads Undefined and dies mid-render ("invalid value 'UndefinedType'
+		// to load attribute 'startswith'"). Refuse before shelling out, so the
+		// developer gets a sentence instead of a KCL stack trace.
+		if body.Stack == "" {
+			httputil.WriteJSON(w, http.StatusOK, api.RenderPreviewResponse{OK: false, Error: "select a stack first — the preview renders the claim into that stack's namespace"})
+			return
 		}
+		s, ok, err := stacks.Stack(req.Context(), body.Stack)
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !ok {
+			httputil.WriteJSON(w, http.StatusOK, api.RenderPreviewResponse{OK: false, Error: "unknown stack " + body.Stack})
+			return
+		}
+		namespace := s.Namespace
 
 		gvk, err := stacks.GVK(req.Context())
 		if err != nil {
