@@ -468,7 +468,14 @@ export function WizardForm({ schema, user, initial, onBack }: Props) {
           {/* Preview affordance is hidden when the render preview is disabled on
               this deployment (FR-005); validation + Open PR still work. */}
           {schema.renderEnabled && (
-            <Button type="button" variant="outline" onClick={onPreview} disabled={previewing}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onPreview}
+              // No stack means no namespace on the claim, and the Composition
+              // cannot render one (see onPreview's callee). Wait for the stack.
+              disabled={previewing || !stack}
+            >
               {previewing ? "Rendering…" : "Preview"}
             </Button>
           )}
